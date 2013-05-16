@@ -16,9 +16,11 @@ import functools
 
 import yum
 
-from UbuntuDrivers import kerneldetection
+from KororaDrivers import kerneldetection
+from KororaDrivers.YumCache import YumCache
 
-system_architecture = apt.apt_pkg.get_architectures()[0]
+yb = yum.YumBase()
+system_architecture = yb.arch.basearch
 
 def system_modaliases():
     '''Get modaliases present in the system.
@@ -26,7 +28,7 @@ def system_modaliases():
     This ignores devices whose drivers are statically built into the kernel, as
     you cannot replace them with other driver packages anyway.
 
-    Return a modalias → sysfs path map. The keys of the returned map are
+    Return a modalias -> sysfs path map. The keys of the returned map are
     suitable for a PackageKit WhatProvides(MODALIAS) call.
     '''
     aliases = {}
@@ -69,12 +71,12 @@ def system_modaliases():
 
     return aliases
 
-def _check_video_abi_compat(apt_cache, record):
+def _check_video_abi_compat(yum_cache, record):
     xorg_video_abi = None
 
     # determine current X.org video driver ABI
     try:
-        for p in apt_cache['xserver-xorg-core'].candidate.provides:
+        for p in yum_cache['xserver-xorg-core'].candidate.provides:
             if p.startswith('xorg-video-abi-'):
                 xorg_video_abi = p
                 #logging.debug('_check_video_abi_compat(): Current X.org video abi: %s', xorg_video_abi)
@@ -109,8 +111,8 @@ def _check_video_abi_compat(apt_cache, record):
 
     return True
 
-def _apt_cache_modalias_map(apt_cache):
-    '''Build a modalias map from an apt.Cache object.
+def _yum_cache_modalias_map(yum_cache):
+    '''Build a modalias map from an YumCache object.
 
     This filters out uninstallable video drivers (i. e. which depend on a video
     ABI that xserver-xorg-core does not provide).
@@ -119,52 +121,49 @@ def _apt_cache_modalias_map(apt_cache):
     the modalias up to the first ':' (e. g. "pci" or "usb").
     '''
     result = {}
-    for package in apt_cache:
+ 
+    for package in yum_cache.package_list():
         # skip foreign architectures, we usually only want native
         # driver packages
+
         if (not package.candidate or
-            package.candidate.architecture not in ('all', system_architecture)):
+            package.candidate.arch not in ('noarch', system_architecture)):
             continue
 
         # skip packages without a modalias field
         try:
-            m = package.candidate.record['Modaliases']
+            m = package.record('modaliases')
         except (KeyError, AttributeError, UnicodeDecodeError):
             continue
 
         # skip incompatible video drivers
-        if not _check_video_abi_compat(apt_cache, package.candidate.record):
-            continue
+#        if not _check_video_abi_compat(yum_cache, package.candidate.record):
+#            continue
 
         try:
-            for part in m.split(')'):
-                part = part.strip(', ')
-                if not part:
-                    continue
-                module, lst = part.split('(')
-                for alias in lst.split(','):
-                    alias = alias.strip()
-                    bus = alias.split(':', 1)[0]
-                    result.setdefault(bus, {}).setdefault(alias, set()).add(package.name)
+            for l in m:
+                alias = l['alias']
+                bus = alias.split(':', 1)[0]
+                result.setdefault(bus, {}).setdefault(alias, set()).add(package.name)
         except ValueError:
             logging.error('Package %s has invalid modalias header: %s' % (
                 package.name, m))
 
     return result
 
-def packages_for_modalias(apt_cache, modalias):
+def packages_for_modalias(yum_cache, modalias):
     '''Search packages which match the given modalias.
 
-    Return a list of apt.Package objects.
+    Return a list of YumCachePackage objects.
     '''
     pkgs = set()
 
-    apt_cache_hash = hash(apt_cache)
+    yum_cache_hash = hash(yum_cache)
     try:
-        cache_map = packages_for_modalias.cache_maps[apt_cache_hash]
+        cache_map = packages_for_modalias.cache_maps[yum_cache_hash]
     except KeyError:
-        cache_map = _apt_cache_modalias_map(apt_cache)
-        packages_for_modalias.cache_maps[apt_cache_hash] = cache_map
+        cache_map = _yum_cache_modalias_map(yum_cache)
+        packages_for_modalias.cache_maps[yum_cache_hash] = cache_map
 
     bus_map = cache_map.get(modalias.split(':', 1)[0], {})
     for alias in bus_map:
@@ -172,26 +171,21 @@ def packages_for_modalias(apt_cache, modalias):
             for p in bus_map[alias]:
                 pkgs.add(p)
 
-    return [apt_cache[p] for p in pkgs]
+    return [yum_cache.package(p) for p in pkgs]
 
 packages_for_modalias.cache_maps = {}
 
 def _is_package_free(pkg):
     assert pkg.candidate is not None
-    # it would be better to check the actual license, as we do not have
-    # the component for third-party packages; but this is the best we can do
-    # at the moment
-    if pkg.candidate.section.startswith('restricted') or \
-            pkg.candidate.section.startswith('multiverse'):
-        return False
-    return True
+
+    return pkg.candidate.license in ('GPL', 'GPL v2', 'GPL and additional rights', 'Dual BSD/GPL', 'Dual MIT/GPL', 'Dual MPL/GPL', 'BSD', 'GPLv2+', 'GPLv3')
 
 def _is_package_from_distro(pkg):
     if pkg.candidate is None:
         return False
 
-    for o in pkg.candidate.origins:
-        if o.origin == 'Ubuntu':
+    if pkg.candidate.repoid.startswith('fedora') or \
+       pkg.candidate.repoid.startswith('korora'):
             return True
     return False
 
@@ -199,17 +193,21 @@ def _pkg_get_module(pkg):
     '''Determine module name from apt Package object'''
 
     try:
-        m = pkg.candidate.record['Modaliases']
+        m = pkg.record('modaliases')
     except (KeyError, AttributeError):
         logging.debug('_pkg_get_module %s: package has no Modaliases header, cannot determine module', pkg.name)
         return None
 
-    paren = m.find('(')
-    if paren <= 0:
-        logging.warning('_pkg_get_module %s: package has invalid Modaliases header, cannot determine module', pkg.name)
+    z = set()
+
+    for l in m:
+      z.add( l['module'] )
+      
+    if len(z) > 1:
+        logging.warning('_pkg_get_module %s: package has multiple modaliases, cannot determine module', pkg.name)
         return None
 
-    module = m[:paren]
+    module = z.pop()
     return module
 
 def _is_manual_install(pkg):
@@ -278,20 +276,20 @@ def _get_db_name(syspath, alias):
                   alias, vendor, model)
     return (vendor, model)
 
-def system_driver_packages(apt_cache=None):
+def system_driver_packages(yum_cache=None):
     '''Get driver packages that are available for the system.
 
     This calls system_modaliases() to determine the system's hardware and then
-    queries apt about which packages provide drivers for those. It also adds
+    queries yum about which packages provide drivers for those. It also adds
     available packages from detect_plugin_packages().
 
-    If you already have an apt.Cache() object, you should pass it as an
+    If you already have a YumCache() object, you should pass it as an
     argument for efficiency. If not given, this function creates a temporary
     one by itself.
 
     Return a dictionary which maps package names to information about them:
 
-      driver_package → {'modalias': 'pci:...', ...}
+      driver_package -> {'modalias': 'pci:...', ...}
 
     Available information keys are:
       'modalias':    Modalias for the device that needs this driver (not for
@@ -313,12 +311,12 @@ def system_driver_packages(apt_cache=None):
     '''
     modaliases = system_modaliases()
 
-    if not apt_cache:
-        apt_cache = apt.Cache()
+    if not yum_cache:
+        yum_cache = YumCache()
 
     packages = {}
     for alias, syspath in modaliases.items():
-        for p in packages_for_modalias(apt_cache, alias):
+        for p in packages_for_modalias(yum_cache, alias):
             packages[p.name] = {
                     'modalias': alias,
                     'syspath': syspath,
@@ -348,32 +346,32 @@ def system_driver_packages(apt_cache=None):
             packages[p]['recommended'] = (p == recommended)
 
     # add available packages which need custom detection code
-    for plugin, pkgs in detect_plugin_packages(apt_cache).items():
+    for plugin, pkgs in detect_plugin_packages(yum_cache).items():
         for p in pkgs:
-            apt_p = apt_cache[p]
+            yum_p = yum_cache[p]
             packages[p] = {
-                    'free': _is_package_free(apt_p),
-                    'from_distro': _is_package_from_distro(apt_p),
+                    'free': _is_package_free(yum_p),
+                    'from_distro': _is_package_from_distro(yum_p),
                     'plugin': plugin,
                 }
 
     return packages
 
-def system_device_drivers(apt_cache=None):
+def system_device_drivers(yum_cache=None):
     '''Get by-device driver packages that are available for the system.
 
     This calls system_modaliases() to determine the system's hardware and then
-    queries apt about which packages provide drivers for each of those. It also
+    queries yum about which packages provide drivers for each of those. It also
     adds available packages from detect_plugin_packages(), using the name of
     the detction plugin as device name.
 
-    If you already have an apt.Cache() object, you should pass it as an
+    If you already have a YumCache() object, you should pass it as an
     argument for efficiency. If not given, this function creates a temporary
     one by itself.
 
     Return a dictionary which maps devices to available drivers:
 
-      device_name →  {'modalias': 'pci:...', <device info>,
+      device_name -> {'modalias': 'pci:...', <device info>,
                       'drivers': {'pkgname': {<driver package info>}}
 
     A key (device name) is either the sysfs path (for drivers detected through
@@ -410,11 +408,11 @@ def system_device_drivers(apt_cache=None):
                      recommended == True, and all others False.
     '''
     result = {}
-    if not apt_cache:
-        apt_cache = apt.Cache()
+    if not yum_cache:
+        yum_cache = YumCache()
 
     # copy the system_driver_packages() structure into the by-device structure
-    for pkg, pkginfo in system_driver_packages(apt_cache).items():
+    for pkg, pkginfo in system_driver_packages(yum_cache).items():
         if 'syspath' in pkginfo:
             device_name = pkginfo['syspath']
         else:
@@ -432,7 +430,7 @@ def system_device_drivers(apt_cache=None):
     # packages are "manually installed"
     for driver, info in result.items():
         for pkg in info['drivers']:
-            if not _is_manual_install(apt_cache[pkg]):
+            if not _is_manual_install(yum_cache.package(pkg)):
                 break
         else:
             info['manual_install'] = True
@@ -463,30 +461,30 @@ def auto_install_filter(packages):
             result[p] = packages[p]
     return result
 
-def detect_plugin_packages(apt_cache=None):
+def detect_plugin_packages(yum_cache=None):
     '''Get driver packages from custom detection plugins.
 
     Some driver packages cannot be identified by modaliases, but need some
     custom code for determining whether they apply to the system. Read all *.py
     files in /usr/share/ubuntu-drivers-common/detect/ or
-    $UBUNTU_DRIVERS_DETECT_DIR and call detect(apt_cache) on them. Filter the
+    $KORORA_DRIVERS_DETECT_DIR and call detect(yum_cache) on them. Filter the
     returned lists for packages which are available for installation, and
     return the joined results.
 
-    If you already have an existing apt.Cache() object, you can pass it as an
+    If you already have an existing YumCache() object, you can pass it as an
     argument for efficiency.
 
     Return pluginname -> [package, ...] map.
     '''
     packages = {}
-    plugindir = os.environ.get('UBUNTU_DRIVERS_DETECT_DIR',
-            '/usr/share/ubuntu-drivers-common/detect/')
+    plugindir = os.environ.get('KORORA_DRIVERS_DETECT_DIR',
+            '/usr/share/korora-drivers-common/detect/')
     if not os.path.isdir(plugindir):
         logging.debug('Custom detection plugin directory %s does not exist', plugindir)
         return packages
 
-    if apt_cache is None:
-        apt_cache = apt.Cache()
+    if yum_cache is None:
+        yum_cache = YumCache()
 
     for fname in os.listdir(plugindir):
         if not fname.endswith('.py'):
@@ -498,7 +496,7 @@ def detect_plugin_packages(apt_cache=None):
         with open(plugin) as f:
             try:
                 exec(compile(f.read(), plugin, 'exec'), symb)
-                result = symb['detect'](apt_cache)
+                result = symb['detect'](yum_cache)
                 logging.debug('plugin %s return value: %s', plugin, result)
             except Exception as e:
                 logging.exception('plugin %s failed:', plugin)
@@ -511,8 +509,8 @@ def detect_plugin_packages(apt_cache=None):
                 continue
 
             for pkg in result:
-                if pkg in apt_cache and apt_cache[pkg].candidate:
-                    if _check_video_abi_compat(apt_cache, apt_cache[pkg].candidate.record):
+                if pkg in yum_cache and yum_cache[pkg].candidate:
+                    if _check_video_abi_compat(yum_cache, yum_cache[pkg].candidate.record):
                         packages.setdefault(fname, []).append(pkg)
                 else:
                     logging.debug('Ignoring unavailable package %s from plugin %s', pkg, plugin)
@@ -563,12 +561,12 @@ def _add_builtins(drivers):
                     'free': True, 'builtin': True, 'from_distro': True, 'recommended': True}
                 break
 
-def get_linux_headers(apt_cache):
+def get_linux_headers(yum_cache):
     '''Return the linux headers for the system's kernel'''
-    kernel_detection = kerneldetection.KernelDetection(apt_cache)
+    kernel_detection = kerneldetection.KernelDetection(yum_cache)
     return kernel_detection.get_linux_headers_metapackage()
 
-def get_linux(apt_cache):
+def get_linux(yum_cache):
     '''Return the linux metapackage for the system's kernel'''
-    kernel_detection = kerneldetection.KernelDetection(apt_cache)
+    kernel_detection = kerneldetection.KernelDetection(yum_cache)
     return kernel_detection.get_linux_metapackage()
