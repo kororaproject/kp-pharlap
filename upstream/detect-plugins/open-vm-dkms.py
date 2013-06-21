@@ -6,6 +6,6 @@
 import os.path
 import os
 
-def detect(apt_cache):
+def detect(yum_cache):
     if os.path.exists(os.environ.get('SYSFS_PATH', '/sys') + '/module/vmxnet'):
         return ['open-vm-dkms']
