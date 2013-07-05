@@ -14,6 +14,7 @@ import fnmatch
 import subprocess
 import functools
 
+import rpm
 import yum
 
 from KororaDrivers import kerneldetection
@@ -121,7 +122,7 @@ def _yum_cache_modalias_map(yum_cache):
     the modalias up to the first ':' (e. g. "pci" or "usb").
     '''
     result = {}
- 
+
     for package in yum_cache.package_list():
         # skip foreign architectures, we usually only want native
         # driver packages
@@ -167,9 +168,12 @@ def packages_for_modalias(yum_cache, modalias):
 
     bus_map = cache_map.get(modalias.split(':', 1)[0], {})
     for alias in bus_map:
-        if fnmatch.fnmatch(modalias, alias):
-            for p in bus_map[alias]:
-                pkgs.add(p)
+        try:
+            if fnmatch.fnmatch(modalias, alias):
+                for p in bus_map[alias]:
+                    pkgs.add(p)
+        except:
+            print modalias
 
     return [yum_cache.package(p) for p in pkgs]
 
@@ -178,15 +182,27 @@ packages_for_modalias.cache_maps = {}
 def _is_package_free(pkg):
     assert pkg.candidate is not None
 
-    return pkg.candidate.license in ('GPL', 'GPL v2', 'GPL and additional rights', 'Dual BSD/GPL', 'Dual MIT/GPL', 'Dual MPL/GPL', 'BSD', 'GPLv2+', 'GPLv3')
+    free_licenses = set(('GPL', 'GPL v2', 'GPL and additional rights', 'Dual BSD/GPL', 'Dual MIT/GPL', 'Dual MPL/GPL', 'BSD', 'GPLv2', 'GPLv2+', 'GPLv3', 'GPLv3+'))
+
+    try:
+      license = set([ p.strip() for p in pkg.installed.returnLocalHeader()[rpm.RPMTAG_LICENSE].split('and') ])
+      return len(license.intersection(free_licenses)) > 0
+    except:
+      pass
+
+    return False
+
 
 def _is_package_from_distro(pkg):
     if pkg.candidate is None:
         return False
 
-    if pkg.candidate.repoid.startswith('fedora') or \
-       pkg.candidate.repoid.startswith('korora'):
+    if pkg.candidate.repoid.lower().startswith('fedora') or \
+       pkg.candidate.repoid.lower().startswith('updates') or \
+       pkg.candidate.repoid.lower().startswith('updates-testing') or \
+       pkg.candidate.repoid.lower().startswith('korora'):
             return True
+
     return False
 
 def _pkg_get_module(pkg):
@@ -202,7 +218,7 @@ def _pkg_get_module(pkg):
 
     for l in m:
       z.add( l['module'] )
-      
+
     if len(z) > 1:
         logging.warning('_pkg_get_module %s: package has multiple modaliases, cannot determine module', pkg.name)
         return None
@@ -217,9 +233,9 @@ def _is_manual_install(pkg):
         return False
 
     # special case, as our packages suffix the kmod with _version
-    if pkg.name.startswith('nvidia'):
+    if pkg.name.endswith('nvidia'):
         module = 'nvidia'
-    elif pkg.name.startswith('fglrx'):
+    elif pkg.name.endswith('fglrx'):
         module = 'fglrx'
     else:
         module = _pkg_get_module(pkg)
@@ -330,7 +346,7 @@ def system_driver_packages(yum_cache=None):
                 packages[p.name]['model'] = model
 
     # Add "recommended" flags for NVidia alternatives
-    nvidia_packages = [p for p in packages if p.startswith('nvidia-')]
+    nvidia_packages = [p for p in packages if p.endswith('kmod-nvidia')]
     if nvidia_packages:
         nvidia_packages.sort(key=functools.cmp_to_key(_cmp_gfx_alternatives))
         recommended = nvidia_packages[-1]
@@ -338,7 +354,7 @@ def system_driver_packages(yum_cache=None):
             packages[p]['recommended'] = (p == recommended)
 
     # Add "recommended" flags for fglrx alternatives
-    fglrx_packages = [p for p in packages if p.startswith('fglrx-')]
+    fglrx_packages = [p for p in packages if p.endswith('kmod-catalyst')]
     if fglrx_packages:
         fglrx_packages.sort(key=functools.cmp_to_key(_cmp_gfx_alternatives))
         recommended = fglrx_packages[-1]
@@ -466,7 +482,7 @@ def detect_plugin_packages(yum_cache=None):
 
     Some driver packages cannot be identified by modaliases, but need some
     custom code for determining whether they apply to the system. Read all *.py
-    files in /usr/share/ubuntu-drivers-common/detect/ or
+    files in /usr/share/korora-drivers-common/detect/ or
     $KORORA_DRIVERS_DETECT_DIR and call detect(yum_cache) on them. Filter the
     returned lists for packages which are available for installation, and
     return the joined results.
@@ -544,20 +560,21 @@ def _add_builtins(drivers):
     '''Add builtin driver alternatives'''
 
     for device, info in drivers.items():
+        print info
         for pkg in info['drivers']:
-            # Nouveau is still not good enough, keep recommending the
-            # proprietary driver
-            if pkg.startswith('nvidia'):
-                info['drivers']['xserver-xorg-video-nouveau'] = {
+            # nouveau is good enough for recommended
+            if pkg.endswith('kmod-nvidia'):
+                for d in info['drivers']:
+                    info['drivers'][d]['recommended'] = False
+                info['drivers']['xorg-x11-drv-nouveau'] = {
                     'free': True, 'builtin': True, 'from_distro': True, 'recommended': False}
                 break
 
-            # These days the free driver is working well enough, so recommend
-            # it
-            if pkg.startswith('fglrx'):
+            # radeon is working well for recommended
+            if pkg.endswith('kmod-catalyst'):
                 for d in info['drivers']:
                     info['drivers'][d]['recommended'] = False
-                info['drivers']['xserver-xorg-video-ati'] = {
+                info['drivers']['x11-xorg-drv-ati'] = {
                     'free': True, 'builtin': True, 'from_distro': True, 'recommended': True}
                 break
 
