@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 
 LATEST_KERNEL_VER="$(uname -r|cut -f1-1 -d'-')"
@@ -11,7 +11,7 @@ JSON=modaliases.json
 OUTPUT_DIR=modaliases
 
 [ -d "$OUTPUT_DIR" ] || mkdir $OUTPUT_DIR
-cd $OUTPUT_DIR
+pushd $OUTPUT_DIR
 
 echo "Downloading kmod packages..."
 yumdownloader "kmod-*"
@@ -29,11 +29,11 @@ echo "{" >> $JSON
 
 function find_kmod_variant() {
   _AKMOD=${1:-}
-  
+
   [ -r "${_AKMOD}" ] || return 1
 
   _AKMOD_NAME=$(rpm -qp --queryformat "%{name}\n" $_AKMOD 2>/dev/null)
-  
+
   for _VARIANT in $(ls -1 ${_AKMOD_NAME:1}* 2>/dev/null)
   do
     _MODULES=$(rpm -qlp "${_VARIANT}" 2>/dev/null| grep ".ko$" | wc -l)
@@ -42,8 +42,6 @@ function find_kmod_variant() {
       echo $_VARIANT
       return 0
     fi
-    
-    
   done
 
   return 1
@@ -91,7 +89,7 @@ do
   fi
 
   echo "Processing: $NAME"
- 
+
   echo " \"$NAME\": {" >> $JSON
   echo "   \"modaliases\": [" >> $JSON
 
@@ -110,7 +108,11 @@ do
       echo "         \"module\": \"$MODULE_NAME\""   >> $JSON
       echo "      },"                                >> $JSON
     done
+
   done
+
+  # clean up last comma
+  sed -i -e '$ s/,$//' $JSON
 
   echo "    ]"   >> $JSON
   echo "  }," >> $JSON
@@ -118,6 +120,15 @@ do
   rm -rf "${PKGDIR}"
 done
 
+# clean up last comma
+sed -i -e '$ s/,$//' $JSON
+
 echo "}"     >> $JSON
 
 echo "Output files ready in $OUTPUT_DIR"
+
+cp $JSON ../
+
+popd
+
+
