@@ -1,9 +1,7 @@
-
 import json
 import yum
 
 class YumCache(object):
-
   def __init__(self, yb=yum.YumBase()):
     self._yb = yb
 
@@ -17,7 +15,7 @@ class YumCache(object):
 
     for p in self._candidate:
       self._c[p.name] = YumCachePackage(name=p.name, candidate=p)
-      
+
     for p in self._installed:
       if not p.name in self._c:
         self._c[p.name] = YumCachePackage(name=p.name)
@@ -32,7 +30,6 @@ class YumCache(object):
       if p in self._c:
         self._c[p].record_set('modaliases',  v['modaliases'])
 
-
   def total_candidates(self):
     return len(self._candidates)
 
@@ -41,7 +38,7 @@ class YumCache(object):
 
   def package_list(self):
     return self._c.values()
-    
+
   def package(self, name):
     if not name in self._c:
       return None
@@ -51,9 +48,8 @@ class YumCache(object):
   def is_installed(self, name):
     if not name in self._c:
       return False
-   
-    return self._c[name]['installed'] is not None 
 
+    return self._c[name].installed is not None
 
 
 class YumCachePackage(object):
