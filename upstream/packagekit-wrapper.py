@@ -123,6 +123,26 @@ class PackageKitClient:
 
     return (str(result[1]), str(result[2]), str(result[3]), str(result[4]), int(result[5]))
 
+  def GetPackages(self, filter):
+    '''Get details about a PackageKit package_id.
+
+    Return tuple (license, group, description, upstream_url, size).
+    '''
+    result = []
+    pk_xn = self._get_xn()
+    pk_xn.connect_to_signal('Package',
+        lambda i, p_id, summary: result.append((str(p_id))))
+    pk_xn.connect_to_signal('ItemProgress', self._h_progress)
+    pk_xn.connect_to_signal('Finished', self._h_finished)
+    pk_xn.connect_to_signal('ErrorCode', self._h_error)
+    pk_xn.GetPackages(filter)
+    self._wait()
+
+    if self._error_enum:
+      raise PackageKitError(self._error_enum)
+
+    return result
+
   def SearchNames(self, filter, name):
     '''Search a package by name.
 
@@ -273,10 +293,17 @@ if __name__ == '__main__':
   print '---- GetDetails() -----'
 #    print pk.GetDetails('installation-guide-powerpc;20080520ubuntu1;all;Ubuntu')
 
+  print '---- GetPackages() -----'
+  a = pk.GetPackages(DBUSPkFilter('available'))
+  i = pk.GetPackages(DBUSPkFilter('installed'))
+  print i
+
+  print('installed: %d, available: %d' %( len(i), len(a) ))
+
+  sys.exit(0)
+
   print '---- SearchNames() -----'
-  print pk.SearchNames(DBUSPkFilter('available'), ['coreutils'])
   print pk.SearchNames(DBUSPkFilter('installed'), ['coreutils'])
-  print pk.SearchNames(DBUSPkFilter('available'), ['gnash'])
 
   def cb(status, _id, pc, c):
       print 'install pkg: %s %s, %i%%, cancel allowed: %s' % (status, _id,  pc, str(c))
