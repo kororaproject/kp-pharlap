@@ -260,7 +260,6 @@ class App(object):
     l_title.set_use_markup(True)
 
     self._box.pack_start(l_title, True, True, 1)
-    l_title.show()
 
   def on_driver_changes_status(self, status):
     print "Status: %d" % status
@@ -442,11 +441,11 @@ class App(object):
     }
 
     returned_drivers = {'recommended': {}, 'alternative': {}, 'manually_installed': {}, 'no_driver': {}}
-    have_builtin = False 
+    have_builtin = False
     one_selected = False
 
     try:
-      if device['manual_install']: 
+      if device['manual_install']:
         returned_drivers['manually_installed'] = {True: {'selected': True, 'description': _("Continue using a manually installed driver")}}
     except KeyError:
       pass
@@ -488,7 +487,7 @@ class App(object):
       if driver_status == 'recommended':
         base_string = _("{base_description} ({licence}, tested)")
       else:
-        base_string = _("{base_description} ({licence})") 
+        base_string = _("{base_description} ({licence})")
       description = base_string.format(base_description=description, licence=licence)
 
       selected = False
@@ -528,6 +527,7 @@ class App(object):
   def show_drivers(self):
     self.ui_building = True
     self.dynamic_device_status = {}
+
     for device in sorted(self.devices.keys()):
       (overall_status, icon, drivers) = self.gather_device_data(self.devices[device])
 
@@ -564,7 +564,7 @@ class App(object):
           device_detail.pack_start(radio_button, True, False, 0)
           radio_button.set_active(drivers[section][driver]['selected'])
 
-          if section == 'no_driver': 
+          if section == 'no_driver':
             self.no_drv.append(radio_button)
 
           if section in ('manually_install', 'no_driver') or ('builtin' in drivers[section][driver] and drivers[section][driver]['builtin']):
@@ -577,11 +577,16 @@ class App(object):
 
       self.box_driver_detail.pack_start(device_box, False, False, 6)
 
+    if len( self.devices.keys() ) == 0:
+      l_title = Gtk.Label('<b>No additional drivers were identified for you hardware.</b>')
+      l_title.set_use_markup(True)
+      self.box_driver_detail.pack_start(l_title, True, True, 6)
+
     self.ui_building = False
     self.box_driver_detail.show_all()
     self.set_driver_action_status()
 
-  def update_label_and_icons_from_status(self): 
+  def update_label_and_icons_from_status(self):
     '''Update the current label and icon, computing the new device status'''
 
     for device in self.devices:
