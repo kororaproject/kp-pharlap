@@ -175,7 +175,7 @@ def packages_for_modalias(yum_cache, modalias):
         except:
             print modalias
 
-    return [yum_cache.package(p) for p in pkgs]
+    return [yum_cache[p] for p in pkgs]
 
 packages_for_modalias.cache_maps = {}
 
@@ -260,37 +260,66 @@ def _get_db_name(syspath, alias):
 
     Values are None if unknown.
     '''
-    # ensure syspath is a device name relative to the sysfs dir
-    syspath = syspath[syspath.index('/devices/'):]
 
-    # check if we have an udev helper for this
-    command = '/lib/udev/%s-db' % alias.split(':')[0]
-    if not os.path.exists(command):
-        logging.debug('_get_db_name(%s, %s): No program %s, cannot identify',
-                      syspath, alias, command)
-        return (None, None)
-
-    # call udev ID helper
-    udev_db = subprocess.Popen([command, syspath], stdout=subprocess.PIPE,
-                               stderr = subprocess.PIPE, universal_newlines=True)
-    (out, err) = udev_db.communicate()
-    if udev_db.returncode != 0:
-        logging.debug('_get_db_name(%s, %s): %s failed with %i:\n%s', syspath,
-                      alias, command, udev_db.returncode, err)
+    db = '/usr/share/hwdata/%s.ids' % alias.split(':')[0]
+    if not os.path.exists(db):
+        print 'DB doesn\'t exist'
         return (None, None)
 
     vendor = None
-    model = None
-    for line in out.splitlines():
-        (k, v) = line.split('=', 1)
-        if k == 'ID_VENDOR_FROM_DATABASE':
-            vendor = v
-        if k == 'ID_MODEL_FROM_DATABASE':
-            model = v
+    device = None
+    subsystem_vendor = None
+    subsystem_device = None
+
+    vendor_name = "Unknown"
+    model_name = "Unknown"
+
+    try:
+        vendor = open('%s/vendor' % syspath).read()[2:6]
+        device = open('%s/device' % syspath).read()[2:6]
+        subsystem_vendor = open('%s/subsystem_vendor' % syspath).read()[2:6]
+        subsystem_device = open('%s/subsystem_device' % syspath).read()[2:6]
+    except:
+        pass
+
+
+    f = open(db, 'rb')
+    _f = f.readlines()
+    f.close()
+
+    found_vendor = False
+
+#    print "V: %s, D: %s, SV: %s, SD: %s" % (vendor, device, subsystem_vendor, subsystem_device)
+
+    for l in _f:
+
+        # skip comments and blank lines
+        if l.startswith('#') or len(l) == 0:
+            continue
+
+        # check for vendor
+        if l.startswith( vendor ):
+            found_vendor = True
+            vendor_name = l[4:].strip()
+            continue
+
+        # strip first tab
+        if found_vendor:
+            if l[0] == "\t":
+                # strip first tab
+                l = l[1:]
+
+                if l.startswith( device ):
+                    model_name = l[4:].strip()
+                    break
+
+            # we're out of options for this vendor
+            else:
+                break
 
     logging.debug('_get_db_name(%s, %s): vendor "%s", model "%s"', syspath,
-                  alias, vendor, model)
-    return (vendor, model)
+                  alias, vendor_name, model_name)
+    return (vendor_name, model_name)
 
 def system_driver_packages(yum_cache=None):
     '''Get driver packages that are available for the system.
@@ -328,7 +357,7 @@ def system_driver_packages(yum_cache=None):
     modaliases = system_modaliases()
 
     if not yum_cache:
-        yum_cache = YumCache()
+        yum_cache = YumCache(yb)
 
     packages = {}
     for alias, syspath in modaliases.items():
@@ -425,7 +454,7 @@ def system_device_drivers(yum_cache=None):
     '''
     result = {}
     if not yum_cache:
-        yum_cache = YumCache()
+        yum_cache = YumCache(yb)
 
     # copy the system_driver_packages() structure into the by-device structure
     for pkg, pkginfo in system_driver_packages(yum_cache).items():
@@ -446,7 +475,7 @@ def system_device_drivers(yum_cache=None):
     # packages are "manually installed"
     for driver, info in result.items():
         for pkg in info['drivers']:
-            if not _is_manual_install(yum_cache.package(pkg)):
+            if not _is_manual_install(yum_cache[pkg]):
                 break
         else:
             info['manual_install'] = True
@@ -500,7 +529,7 @@ def detect_plugin_packages(yum_cache=None):
         return packages
 
     if yum_cache is None:
-        yum_cache = YumCache()
+        yum_cache = YumCache(yb)
 
     for fname in os.listdir(plugindir):
         if not fname.endswith('.py'):
@@ -560,7 +589,6 @@ def _add_builtins(drivers):
     '''Add builtin driver alternatives'''
 
     for device, info in drivers.items():
-        print info
         for pkg in info['drivers']:
             # nouveau is good enough for recommended
             if pkg.endswith('kmod-nvidia'):
@@ -574,7 +602,7 @@ def _add_builtins(drivers):
             if pkg.endswith('kmod-catalyst'):
                 for d in info['drivers']:
                     info['drivers'][d]['recommended'] = False
-                info['drivers']['x11-xorg-drv-ati'] = {
+                info['drivers']['xorg-x11-drv-ati'] = {
                     'free': True, 'builtin': True, 'from_distro': True, 'recommended': True}
                 break
 
