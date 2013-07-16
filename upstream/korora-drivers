@@ -19,11 +19,12 @@
 import dbus
 import inspect
 import os
+import re
 import signal
 import subprocess
 import sys
 
-from packagekit.package import PackageKitEnum
+from yumdaemon import YumDaemonClient
 
 from gettext import gettext as _
 import gettext
@@ -33,11 +34,14 @@ from gi.repository import Gtk, GObject
 from KororaDrivers import detect
 from KororaDrivers.YumCache import YumCache
 
-class PKTransaction:
-  def __init__(self, pk_control=None, install=[], remove=[]):
-    '''Create a new PackageKit Transaction object.'''
-    self._pk_control = pk_control
+class YumTransaction(YumDaemonClient):
+  def __init__(self, install=[], remove=[]):
+    YumDaemonClient.__init__(self)
 
+    self._re_downloads = re.compile('^\(([0-9]+)/([0-9]+)\):')
+
+
+    '''Create a new PackageKit Transaction object.'''
     self._error_enum = None
     self._finished_status = None
     self._interface = None
@@ -49,106 +53,83 @@ class PKTransaction:
     self._packages_install = install
     self._packages_remove = remove
 
-    try:
-      self._tid = self._pk_control.CreateTransaction()
-    except (AttributeError, dbus.DBusException), e:
-      if self._pk_control == None or (hasattr(e, '_dbus_error_name') and \
-        e._dbus_error_name == 'org.freedesktop.DBus.Error.ServiceUnknown'):
-        # first initialization (lazy) or timeout
-        self._pk_control = dbus.Interface(self._bus.get_object(
-            'org.freedesktop.PackageKit', '/org/freedesktop/PackageKit',
-            False), 'org.freedesktop.PackageKit')
-        self._tid = self._pk_control.CreateTransaction()
+    self._update_cb = None
+    self._progress_cb = None
+    self._event_cb = None
+
+    self.Lock()
+
+  def __exit__(self, type, value, traceback):
+    print "_exiting_"
+    self.Unlock()
+    self.Exit()
+
+
+  def on_UpdateProgress(self, name, frac, fread, ftime):
+    if self._update_cb is not None:
+      _progress = 0
+
+      # check for download updates
+      m = self._re_downloads.match( name )
+      if m:
+        (_c, _t) = m.groups()
+
+        _progress = ( float(_c) + frac - 1) / float(_t)
+        return self._update_cb( 'downloading', _progress )
+
       else:
-        raise
+        print "name: %s, frac: %s, fread: %s, ftime: %s" % ( name, frac, fread, ftime )
+        return self._update_cb( 'refreshing', frac )
 
-    self._interface = dbus.Interface(self._bus.get_object('org.freedesktop.PackageKit',
-        self._tid, False), 'org.freedesktop.PackageKit.Transaction')
 
-  def interface(self):
-    return self._interface
+  def on_TransactionEvent(self, event, data):
+    print "event: %s, data: %s" % ( event, data )
+
+  def on_RPMProgress(self, package, action, te_current, te_total, ts_current, ts_total):
+
+    if self._update_cb is not None:
+      _progress = ( (float(te_current) / float(te_total)) + float(ts_current) - 1) / float(ts_total)
+      return self._update_cb( action, _progress )
+
+    print "package: %s, action: %s, te_c: %s, te_t: %s, ts_c: %s, ts_t: %s" % ( package, action, te_current, te_total, ts_current, ts_total )
 
   def id(self):
     return self._tid
 
   def connect(self, signal, callback):
-    if signal == "status-changed":
-      self._interface.connect_to_signal('StatusChanged', callback)
-    elif signal == "progress-changed":
-      self._interface.connect_to_signal('ItemProgress', callback)
-    elif signal == "cancellable-changed":
-      self._interface.connect_to_signal('AllowCancel', callback)
-    elif signal == "finished":
-      self._interface.connect_to_signal('Finished', callback)
-    elif signal == "error":
-      self._interface.connect_to_signal('ErrorCode', callback)
+    if signal == 'progress-changed':
+      self._update_cb = callback
     else:
-      raise Exception("Unknown signal")
+      raise Exception('unknown signal: %s' % signal)
 
   def run(self):
+    stuff_todo = False
+
     if len( self._packages_install ):
-      print "installing:", self._packages_install
-      self._interface.InstallPackages(DBUSPkTransactionFlag('none'), self._packages_install)
+      for p in self._packages_install:
+        print "installing:", p
+#        self.AddTransaction(p, 'install')
+        self.Install(p)
+
+      stuff_todo = True
 
     if len( self._packages_remove ):
-      print "removing:", self._packages_remove
-      self._interface.RemovePackages(DBUSPkTransactionFlag('none'), self._packages_remove, True, True)
+      for p in self._packages_remove:
+        print "removing:", p
+#        self.AddTransaction(p, 'remove')
+        self.Remove(p)
+
+      stuff_todo = True
+
+    if stuff_todo:
+      self.RunTransaction()
+
 
 
   def cancel(self):
-    if self._cancellable:
-      try:
-        self._interface.Cancel()
-      except dbus.DBusException, e:
-        if e._dbus_error_name == 'org.freedesktop.PackageKit.Transaction.CannotCancel':
-          pass
-        else:
-          raise
+    pass
 
 
-class DBUSPkTransactionFlag(dbus.UInt64):
-  def __new__(cls, filters):
-    _filter = 0
-
-    if isinstance(filters, str):
-      for f in filters.split(';'):
-        try:
-          _filter |= ( 1 << PackageKitEnum.transaction_flag.index(f) )
-        except:
-          pass
-
-    return super(DBUSPkTransactionFlag, cls).__new__(cls, _filter)
-
-
-  def suggest_daemon_quit(self):
-    '''Ask the PackageKit daemon to shutdown.'''
-
-    try:
-      self.pk_control.SuggestDaemonQuit()
-    except (AttributeError, dbus.DBusException), e:
-      # not initialized, or daemon timed out
-      pass
-
-  def _get_xn(self):
-    '''Create a new PackageKit Transaction object.'''
-
-    self._error_enum = None
-    self._finished_status = None
-    try:
-      tid = self.pk_control.CreateTransaction()
-    except (AttributeError, dbus.DBusException), e:
-      if self.pk_control == None or (hasattr(e, '_dbus_error_name') and \
-        e._dbus_error_name == 'org.freedesktop.DBus.Error.ServiceUnknown'):
-        # first initialization (lazy) or timeout
-        self.pk_control = dbus.Interface(self.bus.get_object(
-            'org.freedesktop.PackageKit', '/org/freedesktop/PackageKit',
-            False), 'org.freedesktop.PackageKit')
-        tid = self.pk_control.CreateTransaction()
-      else:
-        raise
-
-    return dbus.Interface(self.bus.get_object('org.freedesktop.PackageKit',
-        tid, False), 'org.freedesktop.PackageKit.Transaction')
 
 class App(object):
   def __init__(self):
@@ -159,15 +140,16 @@ class App(object):
     self.yum_cache = YumCache()
 
     self._build_app()
+    self._reboot_required = False
 
     self.show_drivers()
 
   def _build_app(self):
     # build window
-    w = Gtk.Window()
-    w.set_position(Gtk.WindowPosition.CENTER)
-    w.set_wmclass('Korora Drivers', 'Korora Drivers')
-    w.set_title('Korora Drivers')
+    self.window_main = Gtk.Window()
+    self.window_main.set_position(Gtk.WindowPosition.CENTER)
+    self.window_main.set_wmclass('Korora Drivers', 'Korora Drivers')
+    self.window_main.set_title('Korora Drivers')
 
     # devices list - row 1
     self.scrolled_window_drivers = Gtk.ScrolledWindow()
@@ -202,12 +184,10 @@ class App(object):
     sw = Gtk.ScrolledWindow()
     sw.add_with_viewport(bx_main)
 
-    w.add(sw)
-    w.connect('delete-event', self.close)
-    w.set_size_request(600, 400)
-    w.show_all()
-
-    self._window = w
+    self.window_main.add(sw)
+    self.window_main.connect('delete-event', self.close)
+    self.window_main.set_size_request(600, 400)
+    self.window_main.show_all()
 
     self.button_driver_revert = Gtk.Button(label=_("Re_vert"), use_underline=True)
     self.button_driver_revert.set_margin_left(8)
@@ -255,27 +235,27 @@ class App(object):
     self.nonfree_drivers = 0
     self.ui_building = False
 
-  def addNoDeviceWidget(self):
-    l_title = Gtk.Label('<b>No additional drivers were identified for you hardware.</b>')
-    l_title.set_use_markup(True)
-
-    self._box.pack_start(l_title, True, True, 1)
-
   def on_driver_changes_status(self, status):
     print "Status: %d" % status
     print self.transaction.interface().status
     print self.transaction.interface().role
     print self.transaction.interface().status
 
-  def on_driver_changes_progress(self, package_id, status, percentage):
+  def on_driver_changes_progress(self, status, percentage):
     self.button_driver_revert.set_visible(False)
     self.button_driver_apply.set_visible(False)
     self.button_driver_restart.set_visible(False)
     self.button_driver_cancel.set_visible(True)
     self.progress_bar.set_visible(True)
 
-    self.label_driver_action.set_label(_("Applying changes..."))
-    self.progress_bar.set_fraction(percentage / 100.0)
+    if status == 'refreshing':
+      self.label_driver_action.set_label(_("Refreshing repositories ..."))
+    elif status == 'downloading':
+      self.label_driver_action.set_label(_("Downloading packages..."))
+    else:
+      self.label_driver_action.set_label(_("Applying changes..."))
+
+    self.progress_bar.set_fraction(percentage)
 
   def on_driver_changes_finish(self, status, code):
     self.progress_bar.set_visible(False)
@@ -311,35 +291,68 @@ class App(object):
     for pkg in self.driver_changes:
       if pkg.is_installed():
 
-        removals.append(pkg.pkname)
+        removals.append(pkg.name)
 
         # akmods need any created kmods to also be removed
         # assumes "akmod-name" packages produce "kmod-name-*" packages
         if pkg.name.startswith('akmod-'):
-          print "searching for akmod subpackages: %s-*" % pkg.name[1:]
+          # check if the kmod is installed
+          if not self.yum_cache.is_installed( pkg.name[1:] ):
+            print "searching for akmod subpackages: %s-*" % pkg.name[1:]
 
-          for p in self.yum_cache.search_installed( '%s-*' % pkg.name[1:] ):
-            removals.append(p.pkname)
+            for p in self.yum_cache.search_installed( '%s-*' % pkg.name[1:] ):
+              removals.append(p.name)
+
+          else:
+            print 'only removing the akmod'
 
       else:
-        installs.append(pkg.pkname)
+        installs.append(pkg.name)
+
+    print installs, removals
 
     try:
-      self.transaction = PKTransaction(install=installs, remove=removals)
-      self.transaction.connect("status-changed", self.on_driver_changes_status)
+      self.transaction = YumTransaction(install=installs, remove=removals)
+#      self.transaction.connect("status-changed", self.on_driver_changes_status)
       self.transaction.connect("progress-changed", self.on_driver_changes_progress)
-      self.transaction.connect("cancellable-changed", self.on_driver_changes_cancellable_changed)
-      self.transaction.connect("finished", self.on_driver_changes_finish)
-      self.transaction.connect("error", self.on_driver_changes_error)
-      self.transaction.run()
+#      self.transaction.connect("cancellable-changed", self.on_driver_changes_cancellable_changed)
+#      self.transaction.connect("finished", self.on_driver_changes_finish)
+#      self.transaction.connect("error", self.on_driver_changes_error)
       self.button_driver_revert.set_sensitive(False)
       self.button_driver_apply.set_sensitive(False)
       self.scrolled_window_drivers.set_sensitive(False)
       self.apply_spinner.start()
       self.apply_spinner.set_visible(True)
 
+      self.transaction.run()
+
+
     except Exception as e:
       print("Warning: install transaction not completed successfully: {}".format(e))
+
+    finally:
+      self.transaction.Unlock()
+      self.transaction.Exit()
+
+      # TODO: remove when we're TRULY async
+      self.progress_bar.set_visible(False)
+      self.apply_spinner.set_visible(False)
+      self.apply_spinner.stop()
+      self.clear_changes()
+
+      self.yum_cache = YumCache()
+      
+      if any('kmod-' in p for p in installs+removals):
+        self._reboot_required = True
+
+
+      self.set_driver_action_status()
+      self.update_label_and_icons_from_status()
+      self.button_driver_revert.set_visible(True)
+      self.button_driver_apply.set_visible(True)
+      self.button_driver_cancel.set_visible(False)
+      self.scrolled_window_drivers.set_sensitive(True)
+
 
   def on_driver_changes_revert(self, button_revert=None):
     # HACK: set all the "Do not use" first; then go through the list of the
@@ -598,7 +611,7 @@ class App(object):
 
   def set_driver_action_status(self):
     # Update the label in case we end up having some kind of proprietary driver in use.
-    if (os.path.exists('/var/run/reboot-required')):
+    if (os.path.exists('/var/run/reboot-required')) or self._reboot_required:
       self.label_driver_action.set_label(_("You need to restart the computer to complete the driver changes."))
       self.button_driver_restart.set_visible(True)
       self.window_main.set_urgency_hint(True)
