@@ -129,6 +129,14 @@ class YumCachePackage(object):
 
     return '%s;%s-%s;%s;%s' % (self._name, self.candidate.version, self.candidate.release, self.candidate.arch, repo)
 
+  @property
+  def ycname(self):
+    repo = 'installed'
+    if self._installed is None:
+      repo = self.candidate.repoid
+
+    return '%s,%s,%s,%s,%s,%s' % (self._name, self.candidate.epoch, self.candidate.version, self.candidate.release, self.candidate.arch, repo)
+
   @name.setter
   def name(self, name):
     self._name = name
