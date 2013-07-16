@@ -1,5 +1,14 @@
 #!/bin/bash
 #
+#
+#
+
+# we need to be root to write the map
+if [ "$(id -u)" -ne 0 ]
+then
+  echo "ERROR: This needs to be run as a root user."
+  exit 1
+fi
 
 LATEST_KERNEL_VER="$(uname -r|cut -f1-1 -d'-')"
 EXCLUDE_KMOD_PKGS="kmod-xtables-addons akmod-xtables-addons"
@@ -7,18 +16,15 @@ NO_AKMOD_PKGS="kmod-staging"
 
 OUTPUT_BASENAME=rpmfusion-modules
 OUTPUT=${OUTPUT_BASENAME}.aliases
-JSON=modaliases.json
-OUTPUT_DIR=modaliases
+OUTPUT_DIR=$(mktemp -d)
+JSON=/usr/share/korora-drivers-common/korora-drivers-modalias.map
 
-[ -d "$OUTPUT_DIR" ] || mkdir $OUTPUT_DIR
 pushd $OUTPUT_DIR
 
 echo "Downloading kmod packages..."
 yumdownloader "kmod-*"
 echo "Downloading akmod packages..."
 yumdownloader "akmod-*"
-
-#[ -e $OUTPUT ] && echo "Output file already exists: $OUTPUT" && exit 1
 
 echo "Generating modalias files..."
 echo "================================================================="
@@ -125,10 +131,10 @@ sed -i -e '$ s/,$//' $JSON
 
 echo "}"     >> $JSON
 
-echo "Output files ready in $OUTPUT_DIR"
-
-cp $JSON ../
-
 popd
 
+# clean up files
+rm -rf $OUTPUT_DIR
+
+echo "Completed."
 
