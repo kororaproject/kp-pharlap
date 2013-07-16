@@ -47,16 +47,16 @@ class QuirkInfo:
             except (OSError, IOError):
                 value = ''
             self._quirk_info[item] = value
-        
+
         return self._quirk_info
 
 
 def main():
     a = QuirkInfo()
     print(a.get_dmi_info())
-    
+
     return 0
 
-#if __name__ == '__main__':
-    #main()
+if __name__ == '__main__':
+  main()
 

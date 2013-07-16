@@ -25,9 +25,9 @@ from subprocess import Popen, PIPE
 import sys, logging
 import yum
 
-from YumModalias import YumModaliasInfo
+from KororaDrivers.YumCache import YumCache
 
-obsoletePackagesPath = '/usr/share/ubuntu-drivers-common/obsolete'
+obsoletePackagesPath = '/usr/share/korora-drivers-common/obsolete'
 
 class NoDatadirError(Exception):
     "Exception thrown when no modaliases dir can be found"
@@ -133,17 +133,13 @@ class NvidiaDetection(object):
         self.drivers = {}
         vendor_product_re = re.compile('pci:v0000(.+)d0000(.+)sv')
 
-        yb = yum.YumBase()
-        yb.conf.cache = 1
+        yum_cache = YumCache()
 
-        ym = YumModaliasInfo()
-
-        for package in sorted(yb.pkgSack.returnPackages()):
-
-            if( not ( 'kmod-nvidia' in str(package) ) or 'experimental' in str(package.repo) ):
+        for package in yum_cache.package_list():
+            if( not ( 'kmod-nvidia' in str(package) ) or 'rawhide' in str(package.candidate.repoid.lower()) ):
                 continue
 
-            if( not ym.hasModalias(package.name) ):
+            if( not package.has_record('modaliases') ):
                 # that's entirely expected for -vdpau and friends; just for
                 # debugging
                 logging.warning('Package %s has no modalias header' % str(package.name))
@@ -151,12 +147,12 @@ class NvidiaDetection(object):
 
             # package names can be like "nvidia-173:i386" and we need to
             # extract the driver flavour from the name e.g. "173"
-            driver_version = self.__get_value_from_name(package.version)
+            driver_version = self.__get_value_from_name(package.candidate.version)
 
             try:
-
-                for alias in ym.getModalias(package.name):
-                    print alias
+                for record in package.record('modaliases'):
+                    print record
+                    alias = record['alias']
                     vp = vendor_product_re.match(alias.lstrip())
                     if not vp:
                         logging.error('Package %s has unexpected modalias: %s' % (

@@ -113,6 +113,9 @@ class YumCachePackage(object):
     self._installed = installed
     self._records = {}
 
+  def __str__(self):
+    return self._name
+
   @property
   def name(self):
     return self._name
@@ -162,6 +165,9 @@ class YumCachePackage(object):
       raise KeyError('%s not a valid record' % (name))
 
     return self._records[name]
+
+  def has_record(self, name):
+    return name in self._records
 
   def record_set(self, name, value):
     self._records[name] = value
