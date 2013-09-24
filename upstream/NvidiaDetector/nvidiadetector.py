@@ -25,7 +25,7 @@ from subprocess import Popen, PIPE
 import sys, logging
 import yum
 
-from KororaDrivers.YumCache import YumCache
+from Pharlap.YumCache import YumCache
 
 obsoletePackagesPath = '/usr/share/korora-drivers-common/obsolete'
 

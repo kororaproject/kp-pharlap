@@ -26,7 +26,8 @@ class YumCache(object):
 
       self._c[p.name].installed = p
 
-    maps = ['/usr/share/korora-drivers-common/korora-drivers-modalias.map',
+    maps = ['/usr/share/pharlap/pharlap-modalias.map',
+            '/tmp/pharlap-modalias.map',
             '/tmp/modaliases.json']
 
     _map_data = None

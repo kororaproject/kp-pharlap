@@ -31,8 +31,8 @@ import gettext
 
 from gi.repository import Gtk, GObject
 
-from KororaDrivers import detect
-from KororaDrivers.YumCache import YumCache
+from Pharlap import detect
+from Pharlap.YumCache import YumCache
 
 class YumTransaction(YumDaemonClient):
   def __init__(self, install=[], remove=[]):

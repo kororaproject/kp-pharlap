@@ -17,7 +17,17 @@ NO_AKMOD_PKGS="kmod-staging"
 OUTPUT_BASENAME=rpmfusion-modules
 OUTPUT=${OUTPUT_BASENAME}.aliases
 OUTPUT_DIR=$(mktemp -d)
-JSON=/usr/share/korora-drivers-common/korora-drivers-modalias.map
+JSON_MAP=pharlap-modalias.map
+
+JSON_DIR=${1:-/usr/share/pharlap/}
+
+if [ ! -d "${JSON_DIR}" ]
+then
+  echo "ERROR: Can't find modalias map destination dir \"${JSON_DIR}\". Please specify."
+  exit 1
+fi
+
+JSON="${JSON_DIR}/${JSON_MAP}"
 
 pushd $OUTPUT_DIR
 

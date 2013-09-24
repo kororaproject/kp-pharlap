@@ -17,8 +17,8 @@ import functools
 import rpm
 import yum
 
-from KororaDrivers import kerneldetection
-from KororaDrivers.YumCache import YumCache
+from Pharlap import kerneldetection
+from Pharlap.YumCache import YumCache
 
 yb = yum.YumBase()
 system_architecture = yb.arch.basearch
