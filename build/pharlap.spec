@@ -27,7 +27,7 @@ mkdir -p $RPM_BUILD_ROOT%{_bindir}
 mkdir -p $RPM_BUILD_ROOT%{_datadir}/%{name}/detect
 mkdir -p $RPM_BUILD_ROOT%{_datadir}/%{name}/quirks
 
-mkdir -p $RPM_BUILD_ROOT%{python_sitelib}/KororaDrivers
+mkdir -p $RPM_BUILD_ROOT%{python_sitelib}/Pharlap
 mkdir -p $RPM_BUILD_ROOT%{python_sitelib}/Quirks
 mkdir -p $RPM_BUILD_ROOT%{python_sitelib}/NvidiaDetector
 
@@ -42,7 +42,7 @@ install -m 0644 quirks/* $RPM_BUILD_ROOT%{_datadir}/%{name}/quirks/
 install -m 0755 share/fake-devices-wrapper $RPM_BUILD_ROOT%{_datadir}/%{name}/fake-devices-wrapper
 install -m 0644 share/obsolete $RPM_BUILD_ROOT%{_datadir}/%{name}/obsolete
 
-install -m 0644 KororaDrivers/* $RPM_BUILD_ROOT%{python_sitelib}/Pharlap/
+install -m 0644 Pharlap/* $RPM_BUILD_ROOT%{python_sitelib}/Pharlap/
 install -m 0644 Quirks/* $RPM_BUILD_ROOT%{python_sitelib}/Quirks/
 install -m 0644 NvidiaDetector/* $RPM_BUILD_ROOT%{python_sitelib}/NvidiaDetector/
 
