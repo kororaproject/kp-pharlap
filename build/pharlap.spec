@@ -9,7 +9,7 @@ URL:            https://github.com/kororaproject/kp-pharlap
 Source0:        %{name}-%{version}.tar.gz
 Requires:       python
 BuildArch:      noarch
-#Requires:       yumdaemon
+Requires:       yumdaemon
 BuildRequires:  python2-devel
 
 %description
