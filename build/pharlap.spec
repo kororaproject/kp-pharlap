@@ -1,6 +1,6 @@
 Name:           pharlap
 Version:        1.0
-Release:        1%{?dist}
+Release:        1%{?dist}.1
 Summary:        System handling for proprietary drivers
 
 Group:          System Environment/Base
@@ -9,7 +9,7 @@ URL:            https://github.com/kororaproject/kp-pharlap
 Source0:        %{name}-%{version}.tar.gz
 Requires:       python
 BuildArch:      noarch
-Requires:       yumdaemon
+Requires:       yumdaemon python-yumdaemon
 BuildRequires:  python2-devel
 
 %description
