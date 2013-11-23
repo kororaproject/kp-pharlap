@@ -148,8 +148,8 @@ class App(object):
     # build window
     self.window_main = Gtk.Window()
     self.window_main.set_position(Gtk.WindowPosition.CENTER)
-    self.window_main.set_wmclass('Korora Drivers', 'Korora Drivers')
-    self.window_main.set_title('Korora Drivers')
+    self.window_main.set_wmclass('Pharlap', 'Pharlap')
+    self.window_main.set_title('Pharlap')
 
     # devices list - row 1
     self.scrolled_window_drivers = Gtk.ScrolledWindow()
