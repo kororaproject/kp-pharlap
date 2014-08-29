@@ -16,7 +16,8 @@ NO_AKMOD_PKGS="kmod-staging"
 
 OUTPUT_BASENAME=rpmfusion-modules
 OUTPUT=${OUTPUT_BASENAME}.aliases
-OUTPUT_DIR=$(mktemp -d)
+
+OUTPUT_DIR=${2:-}
 JSON_MAP=pharlap-modalias.map
 
 JSON_DIR=${1:-/usr/share/pharlap/}
@@ -29,12 +30,21 @@ fi
 
 JSON="${JSON_DIR}/${JSON_MAP}"
 
-pushd $OUTPUT_DIR
+if [ ! -d "${OUTPUT_DIR}" ];
+then
+  OUTPUT_DIR=$(mktemp -d)
+  mkdir -p $OUTPUT_DIR
+  pushd $OUTPUT_DIR
 
-echo "Downloading kmod packages..."
-yumdownloader "kmod-*"
-echo "Downloading akmod packages..."
-yumdownloader "akmod-*"
+  echo "Downloading kernel package..."
+  yumdownloader "kernel"
+  echo "Downloading kmod packages..."
+  yumdownloader "kmod-*"
+  echo "Downloading akmod packages..."
+  yumdownloader "akmod-*"
+else
+  pushd $OUTPUT_DIR
+fi
 
 echo "Generating modalias files..."
 echo "================================================================="
@@ -65,6 +75,8 @@ function find_kmod_variant() {
 
 for RPM in *.rpm
 do
+  echo ${RPM}
+
   if [[ $RPM == akmod* ]];
   then
     AKMOD_NAME=$(rpm -qp --queryformat "%{name}\n" $RPM 2>/dev/null)
@@ -79,6 +91,9 @@ do
 
     RPM=$KMOD_VARIANT
 
+  elif [[ $RPM == kernel* ]];
+  then
+    NAME="kernel"
   elif [ "${RPM%%-${LATEST_KERNEL_VER}*}" == "$RPM" ]
   then
     echo "Skipping, kmod is not for current kernel."
@@ -144,7 +159,7 @@ echo "}"     >> $JSON
 popd
 
 # clean up files
-rm -rf $OUTPUT_DIR
+#rm -rf $OUTPUT_DIR
 
 echo "Completed."
 

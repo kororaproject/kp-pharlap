@@ -1,50 +1,43 @@
+import dnf
 import fnmatch
+import hawkey
 import json
-import yum
 
-class YumCache(object):
-  def __init__(self, yb=yum.YumBase()):
-    if not isinstance(yb, yum.YumBase):
-      raise Exception('Expected YumBase object.')
+class DNFCache(object):
+  def __init__(self, db=dnf.Base()):
+    if not isinstance(db, dnf.Base):
+      raise Exception('Expected dnf.Base object.')
 
-    self._yb = yb
+    self._db = db
 
     # we're a cache after all
-    self._yb.conf.cache = 1
+    self._db.conf.releasever = dnf.rpm.detect_releasever( db.conf.installroot )
+    subst = self._db.conf.substitutions
+    suffix = dnf.yum.parser.varReplace(dnf.const.CACHEDIR_SUFFIX, subst)
+    cli_cache = dnf.conf.CliCache(self._db.conf.cachedir, suffix)
+    self._db.conf.cachedir = cli_cache.cachedir
+    self._system_cachedir = cli_cache.system_cachedir
 
-    self._candidate = self._yb.pkgSack.returnNewestByNameArch()
-    self._installed = self._yb.rpmdb.returnPackages()
+    self._db.read_all_repos()
+
+    # fill the sack with goodies
+    self._db.fill_sack()
+
+    q = self._db.sack.query()
+    self._candidate = list( q.available() )
+    self._installed = list( q.installed() )
 
     self._c = {}
 
     for p in self._candidate:
-      self._c[p.name] = YumCachePackage(name=p.name, candidate=p)
+      self._c[p.name] = DNFCachePackage(name=p.name, candidate=p)
 
     for p in self._installed:
       if not p.name in self._c:
-        self._c[p.name] = YumCachePackage(name=p.name)
+        self._c[p.name] = DNFCachePackage(name=p.name)
 
       self._c[p.name].installed = p
 
-    maps = ['/usr/share/pharlap/pharlap-modalias.map',
-            '/tmp/pharlap-modalias.map',
-            '/tmp/modaliases.json']
-
-    _map_data = None
-    for m in maps:
-      try:
-        raw_data = open(m)
-        _map_data = json.load(raw_data)
-        break
-      except Exception:
-        pass
-
-    if _map_data is not None:
-      for p,v in _map_data.iteritems():
-        if p in self._c:
-          self._c[p].record_set('modaliases',  v['modaliases'])
-    else:
-      print "No modalias maps available."
 
   def total_candidates(self):
     return len(self._candidates)
@@ -53,7 +46,7 @@ class YumCache(object):
     return len(self._installed)
 
   def package_list(self):
-    return self._c.values()
+    return list(self._c.values())
 
   def package(self, name):
     if not name in self._c:
@@ -107,7 +100,7 @@ class YumCache(object):
     return self._c.itervalues()
 
 
-class YumCachePackage(object):
+class DNFCachePackage(object):
   def __init__(self, name='', candidate=None, installed=None):
     self._name = name
     self._candidate = candidate
@@ -122,6 +115,14 @@ class YumCachePackage(object):
     return self._name
 
   @property
+  def summary(self):
+    return self.candidate.summary
+
+  @property
+  def version(self):
+    return self.candidate.version
+
+  @property
   def shortname(self):
     return self._name
 
@@ -134,7 +135,7 @@ class YumCachePackage(object):
     return '%s;%s-%s;%s;%s' % (self._name, self.candidate.version, self.candidate.release, self.candidate.arch, repo)
 
   @property
-  def ycname(self):
+  def cname(self):
     repo = 'installed'
     if self._installed is None:
       repo = self.candidate.repoid

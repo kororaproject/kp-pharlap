@@ -25,7 +25,7 @@ from subprocess import Popen, PIPE
 import sys, logging
 import yum
 
-from Pharlap.YumCache import YumCache
+from Pharlap.DNFCache import DNFCache
 
 obsoletePackagesPath = '/usr/share/korora-drivers-common/obsolete'
 
@@ -133,7 +133,7 @@ class NvidiaDetection(object):
         self.drivers = {}
         vendor_product_re = re.compile('pci:v0000(.+)d0000(.+)sv')
 
-        yum_cache = YumCache()
+        yum_cache = DNFCache()
 
         for package in yum_cache.package_list():
             if( not ( 'kmod-nvidia' in str(package) ) or 'rawhide' in str(package.candidate.repoid.lower()) ):

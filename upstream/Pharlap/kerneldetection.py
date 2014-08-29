@@ -22,7 +22,6 @@
 
 import logging
 import re
-import yum
 
 from subprocess import Popen
 

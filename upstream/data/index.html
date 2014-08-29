@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en" ng-app="pharlap">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="css/bootstrap.min.css" rel="stylesheet" media="screen">
+  <link href="css/font-awesome.min.css" rel="stylesheet" media="screen">
+  <link href="css/welcome.css" rel="stylesheet" media="screen">
+</head>
+<body class="unselectable" ng-controller="PharlapCtrl">
+  <div class="curtain">
+    <div class="curtain-loader">
+      <div class="loader" style="display: none;">
+        <div id="loader-1"></div>
+        <div id="loader-2"></div>
+        <div id="loader-3"></div>
+        <div id="loader-4"></div>
+        <div id="loader-5"></div>
+      </div>
+    </div>
+  </div>
+  <div class="page-container hide">
+    <nav id="korobar" class="navbar navbar-default navbar-empty" role="navigation"></nav>
+
+    <div class="page-content navbar-empty">
+      <div class="container">
+        <div class="row">
+          <div class="col-sm-3">
+            <div class="sidebar">
+              <ul class="nav nav-tabs tabs-left">
+                <li><a href="#input" data-toggle="tab"><i class="fa fa-fw fa-keyboard-o"></i> Input <span class="badge tab-badge">{{formatHideZero(countDeviceByClass('input'))}}</span></a></li>
+                <li><a href="#graphics" data-toggle="tab"><i class="fa fa-fw fa-desktop"></i> Graphics <span class="badge tab-badge">{{formatHideZero(countDeviceByClass('graphics'))}}</span></a></li>
+                <li class="active"><a href="#network" data-toggle="tab"><i class="fa fa-fw fa-signal"></i> Network <span class="badge tab-badge">{{formatHideZero(countDeviceByClass('network'))}}</span></a></li>
+                <li><a href="#sound" data-toggle="tab"><i class="fa fa-fw fa-volume-up"></i> Sound <span class="badge tab-badge">{{formatHideZero(countDeviceByClass('sound'))}}</span></a></li>
+                <li><a href="#other" data-toggle="tab"><i class="fa fa-fw fa-cogs"></i> Other <span class="badge tab-badge">{{formatHideZero(countDeviceByClass('other'))}}</span></a></li>
+                <li><a href="#settings" data-toggle="tab"><i class="fa fa-fw fa-wrench"></i> Settings</a></li>
+              </ul>
+            </div>
+          </div>
+          <div class="col-sm-9">
+            <div class="tab-content">
+              <div class="tab-pane fade" id="input">
+                <div ng-repeat="(path, pv) in filterDeviceByClass('input')" class="device-block">
+                  <img ng-src="img/{{getIconName(pv.vendor)}}" class="device-logo"></img>
+                  <div class="device-details">
+                    <h1>{{pv.model}}</h1>
+                    <h2>{{pv.vendor}}</h2>
+                    <ul class="fa-ul">
+                      <li ng-repeat="(driver,dv) in pv.drivers" ng-click="selectDriver(pv, driver)" class="click-target">
+                        <i class="fa-li fa" ng-class="{'fa-circle-o': !isSelected(dv), 'fa-dot-circle-o': isSelected(dv)}"></i>
+                        <div class="driver-details">
+                          <p><span class="title">{{driver}}</span> <span class="label label-success recommended">{{getRecommendation(dv)}}</span></p>
+                          <p class="version">Version: {{dv.version}}</p>
+                          <div ng-repeat="(module,mv) in dv.modules" class="">
+                            <p>Module: {{module}}</p>
+                            <p>Quirks: {{mv.quirks}}</p>
+                          </div>
+                        </div>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              <div class="tab-pane fade" id="graphics">
+                <div ng-repeat="(path, pv) in filterDeviceByClass('graphics')" class="device-block">
+                  <img ng-src="img/{{getIconName(pv.vendor)}}" class="device-logo"></img>
+                  <div class="device-details">
+                    <h1>{{pv.model}}</h1>
+                    <h2>{{pv.vendor}}</h2>
+                    <ul class="fa-ul">
+                      <li ng-repeat="(driver,dv) in pv.drivers" ng-click="selectDriver(pv, driver)" class="click-target">
+                        <i class="fa-li fa" ng-class="{'fa-circle-o': !isSelected(dv), 'fa-dot-circle-o': isSelected(dv)}"></i>
+                        <div class="driver-details">
+                          <p><span class="title">{{driver}}</span> <span class="label label-success recommended">{{getRecommendation(dv)}}</span></p>
+                          <p class="version">Version: {{dv.version}}</p>
+                          <ul class="fa-ul">
+                            <li ng-repeat="(module,mv) in dv.modules" class="">
+                              <p>Module: {{module}}</p>
+                              <p>Quirks: {{mv.quirks}}</p>
+                              <p>Blacklist: {{mv.blacklisted}} </p>
+                            </li>
+                          </ul>
+                        </div>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              <div class="tab-pane fade in active" id="network">
+                <div ng-repeat="(path, pv) in filterDeviceByClass('network')" class="device-block">
+                  <img ng-src="img/{{getIconName(pv.vendor)}}" class="device-logo"></img>
+                  <div class="device-details">
+                    <h1>{{pv.model}}</h1>
+                    <h2>{{pv.vendor}}</h2>
+                    <ul class="fa-ul">
+                      <li ng-repeat="(driver,dv) in pv.drivers" ng-click="selectDriver(pv, driver)" class="click-target">
+                        <i class="fa-li fa" ng-class="{'fa-circle-o': !isSelected(dv), 'fa-dot-circle-o': isSelected(dv)}"></i>
+                        <div class="driver-details">
+                          <p><span class="title">{{driver}}</span> <span class="version">({{dv.version}})</version> <span class="label label-success recommended">{{getRecommendation(dv)}}</span></p>
+                          <div class="device-modules" ng-hide="!driverHasModules(dv)">
+                            <ul>
+                              <li ng-repeat="(module,mv) in dv.modules" class="">
+                                <button class="btn btn-xs btn-default pull-right"><i class="fa fa-fw fa-cog"></i></button>
+                                <p>Module: {{module}}<span class="label label-black">{{getModuleBlacklistedLabel(mv)}}</span><span class="label label-success">{{getModuleLoadedLabel(pv, module)}}</span></p>
+                                <p ng-hide="!hasQuirks(mv)">Quirks: {{mv.quirks}}</p>
+                              </li>
+                            </ul>
+                          </div>
+                        </div>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              <div class="tab-pane fade" id="sound">
+                <div ng-repeat="(path, pv) in filterDeviceByClass('sound')" class="device-block">
+                  <img ng-src="img/{{getIconName(pv.vendor)}}" class="device-logo"></img>
+                  <div class="device-details">
+                    <h1>{{pv.model}}</h1>
+                    <h2>{{pv.vendor}}</h2>
+                    <ul class="fa-ul">
+                      <li ng-repeat="(driver,dv) in pv.drivers" ng-click="selectDriver(pv, driver)" class="click-target">
+                        <i class="fa-li fa" ng-class="{'fa-circle-o': !isSelected(dv), 'fa-dot-circle-o': isSelected(dv)}"></i>
+                        <div class="driver-details">
+                          <p><span class="title">{{driver}}</span> <span class="label label-success recommended">{{getRecommendation(dv)}}</span></p>
+                          <p class="version">Version: {{dv.version}}</p>
+                          <p class="summary">{{dv.summary}}</p>
+                          <ul class="fa-ul">
+                            <li ng-repeat="(module,mv) in dv.modules" class="">
+                              <p>Module: {{module}}</p>
+                              <p>Quirks: {{mv.quirks}}</p>
+                              <p>Blacklist: {{mv.blacklisted}} </p>
+                            </li>
+                          </ul>
+                        </div>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              <div class="tab-pane fade" id="other">
+                <div ng-repeat="(path, pv) in filterDeviceByClass('other')" class="device-block">
+                  <img ng-src="img/{{getIconName(pv.vendor)}}" class="device-logo"></img>
+                  <div class="device-details">
+                    <h1>{{pv.model}}</h1>
+                    <h2>{{pv.vendor}}</h2>
+                    <ul class="fa-ul">
+                      <li ng-repeat="(driver,dv) in pv.drivers" ng-click="selectDriver(pv, driver)" class="click-target">
+                        <i class="fa-li fa" ng-class="{'fa-circle-o': !isSelected(dv), 'fa-dot-circle-o': isSelected(dv)}"></i>
+                        <div class="driver-details">
+                          <p><span class="title">{{driver}}</span> <span class="label label-success recommended">{{getRecommendation(dv)}}</span></p>
+                          <p class="version">Version: {{dv.version}}</p>
+                          <p class="summary">{{dv.summary}}</p>
+                          <ul class="fa-ul">
+                            <li ng-repeat="(module,mv) in dv.modules" class="">
+                              <p>Module: {{module}}</p>
+                              <p>Quirks: {{mv.quirks}}</p>
+                              <p>Blacklist: {{mv.blacklisted}} </p>
+                            </li>
+                          </ul>
+                        </div>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              <div class="tab-pane fade" id="settings">
+                <p>I AM SETTINGS!</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div class="col-sm-8">
+          <div class="form">
+            <p><a href="cmd://reload">Reload</a><i class="fa fa-fw fa-thumbs-o-up"></i> No proprietary drivers are in use.</p>
+          </div>
+        </div>
+        <div class="col-sm-4 text-right">
+          <a id="close" href="cmd://close" class="btn btn-dark disabled">Revert</a>
+          <a id="close" href="cmd://close" class="btn btn-dark">Apply Changes</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+  <script src="js/jquery.min.js"></script>
+  <script src="js/angular.min.js"></script>
+  <script src="js/bootstrap.min.js"></script>
+  <script src="js/welcome.js"></script>
+</body>
+</html>

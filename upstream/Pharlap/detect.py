@@ -8,26 +8,76 @@
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 
-import os
-import logging
+import dnf
 import fnmatch
-import subprocess
 import functools
-
+import hwdata
+import hawkey
+import json
+import logging
+import os
 import rpm
-import yum
+import subprocess
 
 from Pharlap import kerneldetection
-from Pharlap.YumCache import YumCache
+from Pharlap.DNFCache import DNFCache
 
-yb = yum.YumBase()
-system_architecture = yb.arch.basearch
+db = dnf.Base()
+system_architecture = dnf.arch.basearch( hawkey.detect_arch() )
+device_pci = hwdata.PCI()
+device_usb = hwdata.USB()
+
+
+def load_modalias_map():
+    maps = ['./pharlap-modalias.map',
+            '/usr/share/pharlap/pharlap-modalias.map']
+
+    modalias_map = {}
+
+    for m in maps:
+        try:
+            raw_data = open(m)
+            modalias_map = json.load(raw_data)
+            break
+        except Exception:
+            pass
+
+    return modalias_map
+
+
+def loaded_modules_for_modaliases(modaliases=None):
+    ''' Get the loaded modules for the modalias list provided.
+
+    '''
+    if not modaliases:
+        modaliases = system_modaliases()
+
+    loaded = {}
+
+    for alias in modaliases:
+        alias_info = modaliases[ alias ]
+
+        # check loaded module
+        module_path = os.path.join(alias_info['syspath'], 'driver', 'module')
+
+        if os.path.exists(module_path):
+            # TODO: get package info for loaded module
+            # rpm -qf --queryformat "$%{name}" $(modinfo -F filename module_name)
+            loaded[ alias ] = {
+                'module': os.path.basename(os.path.realpath(module_path)),
+                'package': ''
+            }
+
+    return loaded
+
 
 def system_modaliases():
     '''Get modaliases present in the system.
 
     This ignores devices whose drivers are statically built into the kernel, as
     you cannot replace them with other driver packages anyway.
+
+    This also ignores devices where the model and vendor can not be determined.
 
     Return a modalias -> sysfs path map. The keys of the returned map are
     suitable for a PackageKit WhatProvides(MODALIAS) call.
@@ -51,7 +101,6 @@ def system_modaliases():
         # devices on SSB bus only mention the modalias in the uevent file (as
         # of 2.6.24)
         elif 'ssb' in path and 'uevent' in files:
-            info = {}
             with open(os.path.join(path, 'uevent')) as f:
                 for l in f:
                     if l.startswith('MODALIAS='):
@@ -61,6 +110,11 @@ def system_modaliases():
         if not modalias:
             continue
 
+        (vendor, model) = _get_db_name(path, modalias)
+
+        if vendor is None or model is None:
+            continue
+
         # ignore drivers which are statically built into the kernel
         driverlink =  os.path.join(path, 'driver')
         modlink = os.path.join(driverlink, 'module')
@@ -68,16 +122,30 @@ def system_modaliases():
             #logging.debug('system_modaliases(): ignoring device %s which has no module (built into kernel)', path)
             continue
 
-        aliases[modalias] = path
+        aliases[modalias] = {
+            'syspath': path,
+            'vendor':  vendor,
+            'model':   model
+        }
+
+        # check loaded module
+        module_path = os.path.join(path, 'driver', 'module')
+        if os.path.exists(module_path):
+            # TODO: get package info for loaded module
+            # rpm -qf --queryformat "$%{name}" $(modinfo -F filename module_name)
+            aliases[modalias]['module'] = os.path.basename(os.path.realpath(module_path))
+
 
     return aliases
 
-def _check_video_abi_compat(yum_cache, record):
+
+
+def _check_video_abi_compat(cache, record):
     xorg_video_abi = None
 
     # determine current X.org video driver ABI
     try:
-        for p in yum_cache['xserver-xorg-core'].candidate.provides:
+        for p in cache['xserver-xorg-core'].candidate.provides:
             if p.startswith('xorg-video-abi-'):
                 xorg_video_abi = p
                 #logging.debug('_check_video_abi_compat(): Current X.org video abi: %s', xorg_video_abi)
@@ -112,8 +180,8 @@ def _check_video_abi_compat(yum_cache, record):
 
     return True
 
-def _yum_cache_modalias_map(yum_cache):
-    '''Build a modalias map from an YumCache object.
+def _cache_modalias_map(cache):
+    '''Build a modalias map from an DNFCache object.
 
     This filters out uninstallable video drivers (i. e. which depend on a video
     ABI that xserver-xorg-core does not provide).
@@ -123,12 +191,11 @@ def _yum_cache_modalias_map(yum_cache):
     '''
     result = {}
 
-    for package in yum_cache.package_list():
+    for p in cache.package_list():
         # skip foreign architectures, we usually only want native
         # driver packages
 
-        if (not package.candidate or
-            package.candidate.arch not in ('noarch', system_architecture)):
+        if not (p.candidate and p.candidate.arch in ('noarch', system_architecture)):
             continue
 
         # skip packages without a modalias field
@@ -138,7 +205,7 @@ def _yum_cache_modalias_map(yum_cache):
             continue
 
         # skip incompatible video drivers
-#        if not _check_video_abi_compat(yum_cache, package.candidate.record):
+#        if not _check_video_abi_compat(cache, package.candidate.record):
 #            continue
 
         try:
@@ -152,58 +219,53 @@ def _yum_cache_modalias_map(yum_cache):
 
     return result
 
-def packages_for_modalias(yum_cache, modalias):
+def packages_for_modalias(cache, modalias_map, modalias):
     '''Search packages which match the given modalias.
 
-    Return a list of YumCachePackage objects.
+    Return a list of DNFCachePackage objects.
     '''
     pkgs = set()
 
-    yum_cache_hash = hash(yum_cache)
-    try:
-        cache_map = packages_for_modalias.cache_maps[yum_cache_hash]
-    except KeyError:
-        cache_map = _yum_cache_modalias_map(yum_cache)
-        packages_for_modalias.cache_maps[yum_cache_hash] = cache_map
+    bus = modalias.split(':')[0]
 
-    bus_map = cache_map.get(modalias.split(':', 1)[0], {})
-    for alias in bus_map:
+    for alias in modalias_map.setdefault(bus, {}):
         try:
             if fnmatch.fnmatch(modalias, alias):
-                for p in bus_map[alias]:
-                    pkgs.add(p)
+                for p in modalias_map[bus][alias]:
+                    pkgs.add( p )
         except:
-            print modalias
+            print('No match for: %s' % modalias)
 
-    return [yum_cache[p] for p in pkgs]
+    return [cache[p] for p in pkgs]
 
-packages_for_modalias.cache_maps = {}
+def drivers_for_modalias(cache, modalias_map, modalias):
+    '''Search packages which match the given modalias.
+
+    Return a list of DNFCachePackage objects.
+    '''
+    bus = modalias.split(':')[0]
+    bus_map = modalias_map.setdefault(bus, {})
+
+    return [ alias for alias in bus_map  if fnmatch.fnmatch(modalias, alias) ]
+
 
 def _is_package_free(pkg):
     assert pkg.candidate is not None
 
     free_licenses = set(('GPL', 'GPL v2', 'GPL and additional rights', 'Dual BSD/GPL', 'Dual MIT/GPL', 'Dual MPL/GPL', 'BSD', 'GPLv2', 'GPLv2+', 'GPLv3', 'GPLv3+'))
 
-    try:
-      license = set([ p.strip() for p in pkg.installed.returnLocalHeader()[rpm.RPMTAG_LICENSE].split('and') ])
-      return len(license.intersection(free_licenses)) > 0
-    except:
-      pass
-
-    return False
-
+    license = set([ p.strip() for p in pkg.candidate.license.split('and') ])
+    return len(license.intersection(free_licenses)) > 0
 
 def _is_package_from_distro(pkg):
     if pkg.candidate is None:
         return False
 
-    if pkg.candidate.repoid.lower().startswith('fedora') or \
-       pkg.candidate.repoid.lower().startswith('updates') or \
-       pkg.candidate.repoid.lower().startswith('updates-testing') or \
-       pkg.candidate.repoid.lower().startswith('korora'):
-            return True
+    repoid = pkg.candidate.repoid.lower()
 
-    return False
+    return repoid.startswith('fedora') or \
+           repoid.startswith('updates') or \
+           repoid.startswith('korora')
 
 def _pkg_get_module(pkg):
     '''Determine module name from apt Package object'''
@@ -223,8 +285,7 @@ def _pkg_get_module(pkg):
         logging.warning('_pkg_get_module %s: package has multiple modaliases, cannot determine module', pkg.name)
         return None
 
-    module = z.pop()
-    return module
+    return z.pop()
 
 def _is_manual_install(pkg):
     '''Determine if the kernel module from an apt.Package is manually installed.'''
@@ -255,15 +316,17 @@ def _is_manual_install(pkg):
                   pkg.name, module)
     return False
 
+
 def _get_db_name(syspath, alias):
     '''Return (vendor, model) names for given device.
 
     Values are None if unknown.
     '''
 
-    db = '/usr/share/hwdata/%s.ids' % alias.split(':')[0]
+    device_type = alias.split(':')[0]
+    db = '/usr/share/hwdata/%s.ids' % device_type
     if not os.path.exists(db):
-        print 'DB doesn\'t exist'
+        logging.debug('DB doesn\'t exists: %s' % (db))
         return (None, None)
 
     vendor = None
@@ -271,64 +334,36 @@ def _get_db_name(syspath, alias):
     subsystem_vendor = None
     subsystem_device = None
 
-    vendor_name = "Unknown"
-    model_name = "Unknown"
+    vendor_name = None
+    device_name = None
 
     try:
         vendor = open('%s/vendor' % syspath).read()[2:6]
         device = open('%s/device' % syspath).read()[2:6]
         subsystem_vendor = open('%s/subsystem_vendor' % syspath).read()[2:6]
         subsystem_device = open('%s/subsystem_device' % syspath).read()[2:6]
+
+        if device_type == 'pci':
+          vendor_name = device_pci.get_vendor(vendor)
+          device_name = device_pci.get_device(vendor, device)
+        elif device_type == 'usb':
+          vendor_name = device_usb.get_vendor(vendor)
+          device_name = device_usb.get_device(vendor, device)
     except:
         pass
 
+    logging.debug('_get_db_name(%s, %s): vendor "%s", device "%s"', syspath,
+                  alias, vendor_name, device_name)
+    return (vendor_name, device_name)
 
-    f = open(db, 'rb')
-    _f = f.readlines()
-    f.close()
-
-    found_vendor = False
-
-#    print "V: %s, D: %s, SV: %s, SD: %s" % (vendor, device, subsystem_vendor, subsystem_device)
-
-    for l in _f:
-
-        # skip comments and blank lines
-        if l.startswith('#') or len(l) == 0:
-            continue
-
-        # check for vendor
-        if l.startswith( vendor ):
-            found_vendor = True
-            vendor_name = l[4:].strip()
-            continue
-
-        # strip first tab
-        if found_vendor:
-            if l[0] == "\t":
-                # strip first tab
-                l = l[1:]
-
-                if l.startswith( device ):
-                    model_name = l[4:].strip()
-                    break
-
-            # we're out of options for this vendor
-            else:
-                break
-
-    logging.debug('_get_db_name(%s, %s): vendor "%s", model "%s"', syspath,
-                  alias, vendor_name, model_name)
-    return (vendor_name, model_name)
-
-def system_driver_packages(yum_cache=None):
+def system_driver_packages(cache=None, modaliases=None):
     '''Get driver packages that are available for the system.
 
     This calls system_modaliases() to determine the system's hardware and then
     queries yum about which packages provide drivers for those. It also adds
     available packages from detect_plugin_packages().
 
-    If you already have a YumCache() object, you should pass it as an
+    If you already have a DNFCache() object, you should pass it as an
     argument for efficiency. If not given, this function creates a temporary
     one by itself.
 
@@ -354,63 +389,98 @@ def system_driver_packages(yum_cache=None):
                      versions; these have this flag, where exactly one has
                      recommended == True, and all others False.
     '''
-    modaliases = system_modaliases()
+    modalias_map = load_modalias_map()
 
-    if not yum_cache:
-        yum_cache = YumCache(yb)
+    if not cache:
+        cache = DNFCache(db)
 
-    packages = {}
-    for alias, syspath in modaliases.items():
-        for p in packages_for_modalias(yum_cache, alias):
-            packages[p.name] = {
-                    'modalias': alias,
-                    'syspath': syspath,
-                    'free': _is_package_free(p),
-                    'from_distro': _is_package_from_distro(p),
-                }
-            (vendor, model) = _get_db_name(syspath, alias)
-            if vendor is not None:
-                packages[p.name]['vendor'] = vendor
-            if model is not None:
-                packages[p.name]['model'] = model
+    if not modaliases:
+        modaliases = system_modaliases()
 
-    # Add "recommended" flags for NVidia alternatives
-    nvidia_packages = [p for p in packages if p.endswith('kmod-nvidia')]
-    if nvidia_packages:
-        nvidia_packages.sort(key=functools.cmp_to_key(_cmp_gfx_alternatives))
-        recommended = nvidia_packages[-1]
-        for p in nvidia_packages:
-            packages[p]['recommended'] = (p == recommended)
+    devices = {}
 
-    # Add "recommended" flags for fglrx alternatives
-    fglrx_packages = [p for p in packages if p.endswith('kmod-catalyst')]
-    if fglrx_packages:
-        fglrx_packages.sort(key=functools.cmp_to_key(_cmp_gfx_alternatives))
-        recommended = fglrx_packages[-1]
-        for p in fglrx_packages:
-            packages[p]['recommended'] = (p == recommended)
+    for alias, alias_info in modaliases.items():
+        print("Checking alias %s ..." % alias)
 
-    # add available packages which need custom detection code
-    for plugin, pkgs in detect_plugin_packages(yum_cache).items():
-        for p in pkgs:
-            yum_p = yum_cache[p]
-            packages[p] = {
-                    'free': _is_package_free(yum_p),
-                    'from_distro': _is_package_from_distro(yum_p),
-                    'plugin': plugin,
-                }
+        matched_aliases   = drivers_for_modalias(cache, modalias_map, alias)
 
-    return packages
+        # continue if not matches found
+        if not matched_aliases:
+            continue
 
-def system_device_drivers(yum_cache=None):
+        bus = alias.split(':')[0]
+
+        # add device since we have some matches
+        device = devices.setdefault(alias_info['syspath'], {
+            'modalias': alias,
+            'vendor': alias_info['vendor'],
+            'model': alias_info['model'],
+            'drivers': {}
+        })
+
+        suitable_packages = set()
+
+        for m in matched_aliases:
+            for p in modalias_map[ bus ][ m ].keys():
+                package = cache[p]
+
+                p_details = modalias_map[ bus ][ m ][ p ]
+
+                suitable_packages.add( p )
+
+                device.setdefault('class', p_details['class'])
+
+                driver = device['drivers'].setdefault(package.name, {
+                    'version': package.version,
+                    'summary': package.summary,
+                    'free': _is_package_free(package),
+                    'from_distro': _is_package_from_distro(package),
+                    'modules' : {}
+                })
+
+                module = p_details['module']
+                driver['modules'].setdefault(module, {
+                    'quirks': '',
+                    'blacklisted': False
+                })
+
+#    # Add "recommended" flags for NVidia alternatives
+#    nvidia_packages = [p for p in packages if p.endswith('kmod-nvidia')]
+#    if nvidia_packages:
+#        nvidia_packages.sort(key=functools.cmp_to_key(_cmp_gfx_alternatives))
+#        recommended = nvidia_packages[-1]
+#        for p in nvidia_packages:
+#            packages[p]['recommended'] = (p == recommended)
+#
+#    # Add "recommended" flags for fglrx alternatives
+#    fglrx_packages = [p for p in packages if p.endswith('kmod-catalyst')]
+#    if fglrx_packages:
+#        fglrx_packages.sort(key=functools.cmp_to_key(_cmp_gfx_alternatives))
+#        recommended = fglrx_packages[-1]
+#        for p in fglrx_packages:
+#            packages[p]['recommended'] = (p == recommended)
+#
+#    # add available packages which need custom detection code
+#    for plugin, pkgs in detect_plugin_packages(cache).items():
+#        for p in pkgs:
+#            yum_p = cache[p]
+#            packages[p] = {
+#                    'free': _is_package_free(yum_p),
+#                    'from_distro': _is_package_from_distro(yum_p),
+#                    'plugin': plugin,
+#                }
+#
+    return devices
+
+def system_device_drivers(cache=None):
     '''Get by-device driver packages that are available for the system.
 
     This calls system_modaliases() to determine the system's hardware and then
-    queries yum about which packages provide drivers for each of those. It also
+    queries DNF about which packages provide drivers for each of those. It also
     adds available packages from detect_plugin_packages(), using the name of
     the detction plugin as device name.
 
-    If you already have a YumCache() object, you should pass it as an
+    If you already have a DNFCache() object, you should pass it as an
     argument for efficiency. If not given, this function creates a temporary
     one by itself.
 
@@ -440,7 +510,7 @@ def system_device_drivers(yum_cache=None):
                      that the user manually installed the driver from upstream.
 
     Aavailable keys in <driver package info>:
-      'builtin':     The package is shipped by default in Ubuntu and MUST
+      'builtin':     The package is shipped by default in Fedora/Korora and MUST
                      NOT be uninstalled. This usually applies to free
                      drivers like xserver-xorg-video-nouveau.
       'free':        Boolean flag whether driver is free, i. e. in the "main"
@@ -451,23 +521,31 @@ def system_device_drivers(yum_cache=None):
       'recommended': Some drivers (nvidia, fglrx) come in multiple variants and
                      versions; these have this flag, where exactly one has
                      recommended == True, and all others False.
+      'activated':   Boolean flag whether the driver is currently loaded into
+                     the kernel or not.
+      'blacklisted': Boolean flag whether the driver is currently blacklisted
+                     or not.
     '''
     result = {}
-    if not yum_cache:
-        yum_cache = YumCache(yb)
+    if not cache:
+        cache = DNFCache(db)
 
     # copy the system_driver_packages() structure into the by-device structure
-    for pkg, pkginfo in system_driver_packages(yum_cache).items():
+    for pkg, pkginfo in system_driver_packages(cache).items():
         if 'syspath' in pkginfo:
             device_name = pkginfo['syspath']
         else:
             device_name = pkginfo['plugin']
+
         result.setdefault(device_name, {})
+
         for opt_key in ('modalias', 'vendor', 'model'):
             if opt_key in pkginfo:
                 result[device_name][opt_key] = pkginfo[opt_key]
+
         drivers = result[device_name].setdefault('drivers', {})
         drivers[pkg] = {'free': pkginfo['free'], 'from_distro': pkginfo['from_distro']}
+
         if 'recommended' in pkginfo:
             drivers[pkg]['recommended'] = pkginfo['recommended']
 
@@ -475,7 +553,7 @@ def system_device_drivers(yum_cache=None):
     # packages are "manually installed"
     for driver, info in result.items():
         for pkg in info['drivers']:
-            if not _is_manual_install(yum_cache[pkg]):
+            if not _is_manual_install(cache[pkg]):
                 break
         else:
             info['manual_install'] = True
@@ -506,17 +584,17 @@ def auto_install_filter(packages):
             result[p] = packages[p]
     return result
 
-def detect_plugin_packages(yum_cache=None):
+def detect_plugin_packages(cache=None):
     '''Get driver packages from custom detection plugins.
 
     Some driver packages cannot be identified by modaliases, but need some
     custom code for determining whether they apply to the system. Read all *.py
     files in /usr/share/korora-drivers-common/detect/ or
-    $KORORA_DRIVERS_DETECT_DIR and call detect(yum_cache) on them. Filter the
+    $KORORA_DRIVERS_DETECT_DIR and call detect(cache) on them. Filter the
     returned lists for packages which are available for installation, and
     return the joined results.
 
-    If you already have an existing YumCache() object, you can pass it as an
+    If you already have an existing DNFCache() object, you can pass it as an
     argument for efficiency.
 
     Return pluginname -> [package, ...] map.
@@ -528,8 +606,8 @@ def detect_plugin_packages(yum_cache=None):
         logging.debug('Custom detection plugin directory %s does not exist', plugindir)
         return packages
 
-    if yum_cache is None:
-        yum_cache = YumCache(yb)
+    if cache is None:
+        cache = DNFCache(db)
 
     for fname in os.listdir(plugindir):
         if not fname.endswith('.py'):
@@ -541,7 +619,7 @@ def detect_plugin_packages(yum_cache=None):
         with open(plugin) as f:
             try:
                 exec(compile(f.read(), plugin, 'exec'), symb)
-                result = symb['detect'](yum_cache)
+                result = symb['detect'](cache)
                 logging.debug('plugin %s return value: %s', plugin, result)
             except Exception as e:
                 logging.exception('plugin %s failed:', plugin)
@@ -554,8 +632,8 @@ def detect_plugin_packages(yum_cache=None):
                 continue
 
             for pkg in result:
-                if pkg in yum_cache and yum_cache[pkg].candidate:
-                    if _check_video_abi_compat(yum_cache, yum_cache[pkg].candidate.record):
+                if pkg in cache and cache[pkg].candidate:
+                    if _check_video_abi_compat(cache, cache[pkg].candidate.record):
                         packages.setdefault(fname, []).append(pkg)
                 else:
                     logging.debug('Ignoring unavailable package %s from plugin %s', pkg, plugin)
@@ -606,12 +684,12 @@ def _add_builtins(drivers):
                     'free': True, 'builtin': True, 'from_distro': True, 'recommended': True}
                 break
 
-def get_linux_headers(yum_cache):
+def get_linux_headers(cache):
     '''Return the linux headers for the system's kernel'''
-    kernel_detection = kerneldetection.KernelDetection(yum_cache)
+    kernel_detection = kerneldetection.KernelDetection(cache)
     return kernel_detection.get_linux_headers_metapackage()
 
-def get_linux(yum_cache):
+def get_linux(cache):
     '''Return the linux metapackage for the system's kernel'''
-    kernel_detection = kerneldetection.KernelDetection(yum_cache)
+    kernel_detection = kerneldetection.KernelDetection(cache)
     return kernel_detection.get_linux_metapackage()

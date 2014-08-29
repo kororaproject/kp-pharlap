@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 '''Driver package query/installation tool for Korora'''
 
@@ -11,14 +11,16 @@
 # (at your option) any later version.
 
 import argparse
+import dnf
+import hawkey
+import json
+import logging
+import os
 import subprocess
 import sys
-import os
-import logging
-import yum
 
 import Pharlap.detect
-from Pharlap.YumCache import YumCache
+from Pharlap.DNFCache import DNFCache
 
 def parse_args():
     '''Parse command line arguments.'''
@@ -80,7 +82,7 @@ def command_devices(args):
 def command_autoinstall(args):
     '''Install drivers that are appropriate for automatic installation.'''
 
-    cache = YumCache()
+    cache = DNFCache()
 
     packages = Pharlap.detect.system_driver_packages(cache)
     packages = Pharlap.detect.auto_install_filter(packages)
@@ -117,7 +119,7 @@ def command_debug(args):
     print('=== log messages from detection ===')
     aliases = Pharlap.detect.system_modaliases()
 
-    cache = YumCache()
+    cache = DNFCache()
 
     packages = Pharlap.detect.system_driver_packages(cache)
     auto_packages = Pharlap.detect.auto_install_filter(packages)
@@ -126,42 +128,44 @@ def command_debug(args):
     for alias in aliases:
         print(alias)
 
-    print('=== matching driver packages ===')
-    for package, info in packages.items():
-        p = cache.package(package)
-        try:
-            inst = p.installed.version
-        except AttributeError:
-            inst = '<none>'
-        try:
-            cand = p.candidate.version
-        except AttributeError:
-            cand = '<none>'
-        if package in auto_packages:
-            auto = ' (auto-install)'
-        else:
-            auto = ''
-
-        info_str = ''
-        if info['from_distro']:
-            info_str += '  [distro]'
-        else:
-            info_str += '  [third party]'
-        if info['free']:
-            info_str += '  free'
-        else:
-            info_str += '  non-free'
-        if 'modalias' in info:
-            info_str += '  modalias: ' + info['modalias']
-        if 'syspath' in info:
-            info_str += '  path: ' + info['syspath']
-        if 'vendor' in info:
-            info_str += '  vendor: ' + info['vendor']
-        if 'model' in info:
-            info_str += '  model: ' + info['model']
-
-        print('%s: installed: %s   available: %s%s%s ' % (package, inst, cand, auto,  info_str))
-
+#    print('=== matching driver packages ===')
+#    for package, info in packages.items():
+#        p = cache.package(package)
+#        try:
+#            inst = p.installed.version
+#        except AttributeError:
+#            inst = '<none>'
+#        try:
+#            cand = p.candidate.version
+#        except AttributeError:
+#            cand = '<none>'
+#        if package in auto_packages:
+#            auto = ' (auto-install)'
+#        else:
+#            auto = ''
+#
+#        info_str = ''
+#        if info['from_distro']:
+#            info_str += '  [distro]'
+#        else:
+#            info_str += '  [third party]'
+#        if info['free']:
+#            info_str += '  free'
+#        else:
+#            info_str += '  non-free'
+#        if 'modalias' in info:
+#            info_str += '  modalias: ' + info['modalias']
+#        if 'syspath' in info:
+#            info_str += '  path: ' + info['syspath']
+#        if 'vendor' in info:
+#            info_str += '  vendor: ' + info['vendor']
+#        if 'model' in info:
+#            info_str += '  model: ' + info['model']
+#
+#        print('%s: installed: %s   available: %s%s%s ' % (package, inst, cand, auto,  info_str))
+#
+    print('=== device_drivers object ===')
+    print('%s' % (json.dumps(packages)))
 #
 # main
 #

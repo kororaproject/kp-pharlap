@@ -1,6 +1,6 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 #
-# Copyright 2012-2013 "Korora Project" <dev@kororaproject.org>
+# Copyright 2012-2014 "Korora Project" <dev@kororaproject.org>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the temms of the GNU General Public License as published by
@@ -16,634 +16,366 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-import dbus
+import random, time
+
+import dnf
+import hawkey
 import inspect
+import json
 import os
-import re
 import signal
 import subprocess
 import sys
-
-from yumdaemon import YumDaemonClient
-
-from gettext import gettext as _
-import gettext
-
-from gi.repository import Gtk, GObject
+import threading
+import urllib.request
+import webbrowser
 
 from Pharlap import detect
-from Pharlap.YumCache import YumCache
+from Pharlap.DNFCache import DNFCache
 
-class YumTransaction(YumDaemonClient):
-  def __init__(self, install=[], remove=[]):
-    YumDaemonClient.__init__(self)
+# GTK
+from gi.repository import WebKit2, Gtk, GObject
 
-    self._re_downloads = re.compile('^\(([0-9]+)/([0-9]+)\):')
+class _IdleObject(GObject.GObject):
+  '''
+  Override gobject.GObject to always emit signals in the main thread
+  by emmitting on an idle handler
+  '''
+  def __init__(self):
+    GObject.GObject.__init__(self)
 
+  def emit(self, *args):
+    GObject.idle_add(GObject.GObject.emit, self, *args)
 
-    '''Create a new PackageKit Transaction object.'''
-    self._error_enum = None
-    self._finished_status = None
-    self._interface = None
+class _FooThread(threading.Thread, _IdleObject):
+  '''
+  Thread which uses GObject signals to return information
+  to the GUI.
+  '''
+  __gsignals__ = {
+    "completed": ( GObject.SIGNAL_RUN_LAST, GObject.TYPE_NONE, []),
+    "progress":  ( GObject.SIGNAL_RUN_LAST, GObject.TYPE_NONE, [GObject.TYPE_FLOAT])        #percent complete
+  }
 
-    self._cancellable = False
+  def __init__(self, target=None, args=(), kwargs={}):
+    threading.Thread.__init__(self, target=target, *args, **kwargs)
+    _IdleObject.__init__(self)
 
-    self._bus = dbus.SystemBus()
-
-    self._packages_install = install
-    self._packages_remove = remove
-
-    self._update_cb = None
-    self._progress_cb = None
-    self._event_cb = None
-
-    self.Lock()
-
-  def __exit__(self, type, value, traceback):
-    print "_exiting_"
-    self.Unlock()
-    self.Exit()
-
-
-  def on_UpdateProgress(self, name, frac, fread, ftime):
-    if self._update_cb is not None:
-      _progress = 0
-
-      # check for download updates
-      m = self._re_downloads.match( name )
-      if m:
-        (_c, _t) = m.groups()
-
-        _progress = ( float(_c) + frac - 1) / float(_t)
-        return self._update_cb( 'downloading', _progress )
-
-      else:
-        print "name: %s, frac: %s, fread: %s, ftime: %s" % ( name, frac, fread, ftime )
-        return self._update_cb( 'refreshing', frac )
-
-
-  def on_TransactionEvent(self, event, data):
-    print "event: %s, data: %s" % ( event, data )
-
-  def on_RPMProgress(self, package, action, te_current, te_total, ts_current, ts_total):
-
-    if self._update_cb is not None:
-      _progress = ( (float(te_current) / float(te_total)) + float(ts_current) - 1) / float(ts_total)
-      return self._update_cb( action, _progress )
-
-    print "package: %s, action: %s, te_c: %s, te_t: %s, ts_c: %s, ts_t: %s" % ( package, action, te_current, te_total, ts_current, ts_total )
-
-  def id(self):
-    return self._tid
-
-  def connect(self, signal, callback):
-    if signal == 'progress-changed':
-      self._update_cb = callback
-    else:
-      raise Exception('unknown signal: %s' % signal)
+    self.setDaemon(True)
 
   def run(self):
-    stuff_todo = False
+    threading.Thread.run(self)
 
-    if len( self._packages_install ):
-      for p in self._packages_install:
-        print "installing:", p
-#        self.AddTransaction(p, 'install')
-        self.Install(p)
+    self.emit("completed")
 
-      stuff_todo = True
+class FooThreadManager():
+  '''
+  Manages many FooThreads. This involves starting and stopping
+  said threads, and respecting a maximum num of concurrent threads limit
+  '''
+  def __init__(self, maxConcurrentThreads):
+    self.maxConcurrentThreads = maxConcurrentThreads
 
-    if len( self._packages_remove ):
-      for p in self._packages_remove:
-        print "removing:", p
-#        self.AddTransaction(p, 'remove')
-        self.Remove(p)
+    #stores all threads, running or stopped
+    self.fooThreads = {}
 
-      stuff_todo = True
+    #the pending thread args are used as an index for the stopped threads
+    self.pendingFooThreadArgs = []
 
-    if stuff_todo:
-      self.RunTransaction()
+  def _register_thread_completed(self, thread, *args):
+    '''
+    Decrements the count of concurrent threads and starts any
+    pending threads if there is space
+    '''
+    del(self.fooThreads[args])
+    running = len(self.fooThreads) - len(self.pendingFooThreadArgs)
+
+    print("%s completed. %s running, %s pending" % (thread, running, len(self.pendingFooThreadArgs)))
+
+    if running < self.maxConcurrentThreads:
+      try:
+        args = self.pendingFooThreadArgs.pop()
+        print("Starting pending %s" % self.fooThreads[args])
+        self.fooThreads[args].start()
+      except IndexError: pass
+
+  def make_thread(self, completedCb, progressCb, userData, target, *args, **kwargs):
+    '''
+    Makes a thread with args. The thread will be started when there is
+    a free slot
+    '''
+    running = len(self.fooThreads) - len(self.pendingFooThreadArgs)
+
+    if args not in self.fooThreads:
+      thread = _FooThread(target=target, *args, **kwargs)
+
+      #signals run in the order connected. Connect the user completed
+      #callback first incase they wish to do something
+      #before we delete the thread
+      thread.connect("completed", completedCb, userData)
+      thread.connect("completed", self._register_thread_completed, *args)
+      thread.connect("progress", progressCb, userData)
+
+      #This is why we use args, not kwargs, because args are hashable
+      self.fooThreads[args] = thread
+
+      if running < self.maxConcurrentThreads:
+        print("Starting %s" % thread)
+        self.fooThreads[args].start()
+
+      else:
+        print("Queing %s" % thread)
+        self.pendingFooThreadArgs.append(args)
+
+  def stop_all_threads(self, block=False):
+    '''
+    Stops all threads. If block is True then actually wait for the thread
+    to finish (may block the UI)
+    '''
+    for thread in self.fooThreads.values():
+      thread.cancel()
+      if block:
+        if thread.isAlive():
+          thread.join()
 
 
+class PharlapConfig(object):
+  def __init__(self):
+    self._modaliases = detect.system_modaliases()
+    self._devices = {}
+    self._loaded_modules = {}
 
-  def cancel(self):
+    # store full path to our binary
+    self._pharlap_bin_path = os.path.abspath(inspect.getfile(inspect.currentframe()))
+
+    # store directory to our pharlap configuration
+    self._config_dir = os.path.expanduser('~/.config/korora/pharlap/')
+
+    # store full path to our autostart symlink
+    self._autostart_path = os.path.expanduser('~/.config/autostart/korora-pharlap.desktop')
+
+    # ensure our config directory exists
+    if not os.path.exists( self._config_dir ):
+      try:
+        os.makedirs( self._config_dir )
+      except OSError as e:
+        pass
+
+    # does autostart symlink exist
+    self._autostart = os.path.exists( self._autostart_path )
+
+
+  def post_init(self):
+    db = dnf.base()
+    self._dnf_cache = dnfcache(db)
+
+
+  def reload_devices(self):
+    self._devices = detect.system_driver_packages(cache=self._dnf_cache, modaliases=self._modaliases)
+
+  def reload_loaded_modules(self):
+    self._loaded_modules = detect.loaded_modules_for_modaliases(modaliases=self._modaliases)
+
+  @property
+  def autostart(self):
+    return self._autostart
+
+  @autostart.setter
+  def autostart(self, state):
+    if( state and not os.path.exists( self._autostart_path ) ):
+      # create the autostart symlink
+      try:
+        os.symlink( '/usr/share/applications/korora-pharlap.desktop', self._autostart_path )
+      except OSError as e:
+        pass
+    elif( not state and os.path.exists( self._autostart_path ) ):
+      # remove the autostart symlink
+      try:
+        os.unlink( self._autostart_path )
+      except OSError as e:
+        pass
+
+    # determine autostart state based on absence of the disable file
+    self._autostart = os.path.exists( self._autostart_path )
+
+  def toDict(self):
+    return {
+      'devices':        self._devices,
+      'modaliases':     self._modaliases,
+      'loaded_modules': self._loaded_modules,
+    }
+
+class KororaAppView(WebKit2.WebView):
+  def __init__(self):
+    WebKit2.WebView.__init__(self)
+
+    self.manager = FooThreadManager(3)
+
+    # load the config object
+    self._config = PharlapConfig()
+
+    # register signals
+    self.connect('load-changed', self._load_changed_cb)
+    self.connect('decide-policy', self._decide_policy_cb)
+    self.connect('notify::title', self._title_changed_cb)
+
+    self.l_uri = None
+
+    # disable right-click context menu
+    #self.get_settings().set_property('enable-default-context-menu', False)
+
+  def _push_data(self, key, value):
+    self.run_javascript("app_rs.$apply( function() { app_rs.$broadcast('configUpdate', '%s', %s) });" % (k, json.dumps(v)), None, None, None)
+
+  def _push_config(self):
+    # we externaly inject a broadcast of the configUpdate event, wrapped in apply for angular's satisifaction
+    self.run_javascript("app_rs.$apply( function() { app_rs.$broadcast('configUpdate', 'config', %s) });" % json.dumps(self._config.toDict()), None, None, None)
+
+  def _load_changed_cb(self, view, event):
+    if event == WebKit2.LoadEvent.FINISHED:
+      # push config on every page load
+      self._push_config()
+
+  def _title_changed_cb(self, view, event):
+    cmd = view.get_title()
+
+    if cmd is None:
+      return
+
+    try:
+      c = json.loads(cmd)
+    finally:
+      return
+
+    self._do_command(c)
+
+  def _decide_policy_cb(self, view, decision, decision_type):
+    if decision_type == WebKit2.PolicyDecisionType.NAVIGATION_ACTION:
+
+      # grab the requested URI
+      uri = decision.get_request().get_uri()
+
+      # TODO: improve separation of HTML5 hash bang versus inline anchors
+      try:
+        if uri.index('#') > 0:
+          uri = uri[:uri.index('#')]
+      except ValueError as e:
+        pass
+
+      # don't reload ourself ( side effect of managing inline anchors )
+      if uri == self.l_uri:
+        return
+      # TODO: end
+
+      # process command URIs
+      if uri.startswith('cmd://'):
+        self._do_command(uri)
+        decision.ignore()
+        return
+
+      # process absolute URIs
+      # open links in a new tab in the default browser
+      if uri.startswith("http://") or \
+         uri.startswith("https://"):
+        decision.ignore()
+        webbrowser.open_new_tab(uri)
+        return
+
+      # store the requested URI for self checks
+      self.l_uri = uri
+
+      # we have a legitimate page so let's load
+      page = urllib.request.urlopen(uri)
+
+  def thread_finished(self, thread, rowref):
+    self._push_config()
+
+  def thread_progress(self, thread, progress, rowref):
     pass
 
+  def _do_command(self, call):
+    if not isinstance(call, dict):
+      return
+
+    cmd = call.setdefault('c', '')
+    args = call.setdefault('a', [])
+
+    if( cmd == 'reload_devices' ):
+      self.manager.make_thread( self.thread_finished, self.thread_progress, None, self._config.reload_devices)
+
+    if( cmd == 'reload_modules' ):
+      self.manager.make_thread( self.thread_finished, self.thread_progress, None, self._config.reload_modules)
+
+    elif( cmd == 'close' ):
+      Gtk.main_quit();
+
+    else:
+      print('Unknown commanad specified: %s' % uri)
 
 
-class App(object):
+class PharlapApp(object):
   def __init__(self):
 
-    import dbus.mainloop.glib
-    dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+    # establish our location
+    self._location = os.path.dirname( os.path.abspath(inspect.getfile(inspect.currentframe())) )
 
-    self.yum_cache = YumCache()
+    # check for relative path
+    if( os.path.exists( os.path.join(self._location, 'data/' ) ) ):
+      print('Using relative path for data source. Non-production testing.')
+      self._data_path = os.path.join(self._location, 'data/')
+    elif( os.path.exists('/usr/share/pharlap/') ):
+      self._data_path = '/usr/share/pharlap/'
+    else:
+      print('Unable to source the pharlap data directory.')
+      sys.exit(1)
 
+    # build the app window
     self._build_app()
-    self._reboot_required = False
-
-    self.show_drivers()
 
   def _build_app(self):
+    file = os.path.abspath( os.path.join( self._data_path, 'index.html') )
+    uri = 'file://' + urllib.request.pathname2url(file)
+
     # build window
-    self.window_main = Gtk.Window()
-    self.window_main.set_position(Gtk.WindowPosition.CENTER)
-    self.window_main.set_wmclass('Pharlap', 'Pharlap')
-    self.window_main.set_title('Pharlap')
+    w = Gtk.Window()
+    w.set_position(Gtk.WindowPosition.CENTER)
+    w.set_wmclass('Pharlap', 'Pharlap')
+    w.set_title('Pharlap')
+    w.set_size_request(792, 496)
 
-    # devices list - row 1
-    self.scrolled_window_drivers = Gtk.ScrolledWindow()
-    self.box_driver_detail = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-    self.scrolled_window_drivers.add_with_viewport(self.box_driver_detail)
+    # build webkit container
+    kv = KororaAppView()
 
-    # controls - row 2
-    self.box_driver_action = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+    # load our index file
+    kv.load_uri(uri)
 
-    self.label_driver_action = Gtk.Label('')
-    self.label_driver_action.set_use_markup(True)
-    self.label_driver_action.set_halign(Gtk.Align.START)
+    # TODO: Move to AppView
 
-    self.box_driver_action.pack_start(self.label_driver_action, False, False, 0)
+    # build scrolled window widget and add our appview container
+    sw = Gtk.ScrolledWindow()
+    sw.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+    sw.add(kv)
 
-    # disclaimer - row 3
-    l_proprietary = Gtk.Label('A proprietary driver has private code that Korora and other open source developers can\'t review or improve. Security and other updates are dependant on the driver vendor and their associated support process, if any.')
-    l_proprietary.set_line_wrap(True)
-    l_proprietary.set_halign(Gtk.Align.START)
-
-    bx_main = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-    bx_main.pack_start(self.scrolled_window_drivers, True, True, 0)
-    bx_main.pack_start(self.box_driver_action, False, False, 8)
-    bx_main.pack_start(l_proprietary, False, False, 0)
-
-    bx_main.set_margin_left(8)
-    bx_main.set_margin_right(8)
-    bx_main.set_margin_top(8)
-    bx_main.set_margin_bottom(8)
+    # build an autoexpanding box and add our scrolled window
+    b = Gtk.VBox(homogeneous=False, spacing=0)
+    b.pack_start(sw, expand=True, fill=True, padding=0)
 
     # add the box to the parent window and show
-    sw = Gtk.ScrolledWindow()
-    sw.add_with_viewport(bx_main)
-
-    self.window_main.add(sw)
-    self.window_main.connect('delete-event', self.close)
-    self.window_main.set_size_request(600, 400)
-    self.window_main.show_all()
-
-    self.button_driver_revert = Gtk.Button(label=_("Re_vert"), use_underline=True)
-    self.button_driver_revert.set_margin_left(8)
-    self.button_driver_revert.connect("clicked", self.on_driver_changes_revert)
-    self.button_driver_apply = Gtk.Button(label=_("_Apply Changes"), use_underline=True)
-    self.button_driver_apply.set_margin_left(8)
-    self.button_driver_apply.connect("clicked", self.on_driver_changes_apply)
-    self.button_driver_cancel = Gtk.Button(label=_("_Cancel"), use_underline=True)
-    self.button_driver_cancel.set_margin_left(8)
-    self.button_driver_cancel.connect("clicked", self.on_driver_changes_cancel)
-    self.button_driver_restart = Gtk.Button(label=_("_Restart..."), use_underline=True)
-    self.button_driver_restart.set_margin_left(8)
-    self.button_driver_restart.connect("clicked", self.on_driver_restart_clicked)
-    self.button_driver_revert.set_sensitive(False)
-    self.button_driver_revert.set_visible(True)
-    self.button_driver_apply.set_sensitive(False)
-    self.button_driver_apply.set_visible(True)
-    self.button_driver_cancel.set_visible(False)
-    self.button_driver_restart.set_visible(False)
-
-    self.box_driver_action.pack_end(self.button_driver_apply, False, False, 0)
-    self.box_driver_action.pack_end(self.button_driver_revert, False, False, 0)
-    self.box_driver_action.pack_end(self.button_driver_restart, False, False, 0)
-    self.box_driver_action.pack_end(self.button_driver_cancel, False, False, 0)
-
-    self.progress_bar = Gtk.ProgressBar()
-    self.progress_bar.set_margin_left(8)
-    self.apply_spinner = Gtk.Spinner()
-    self.apply_spinner.set_margin_left(8)
-    self.box_driver_action.pack_end(self.progress_bar, False, False, 0)
-    self.box_driver_action.pack_end(self.apply_spinner, False, False, 0)
-    self.progress_bar.set_visible(False)
-    self.apply_spinner.set_visible(False)
-
-    self.devices = detect.system_device_drivers(self.yum_cache)
-    self.driver_changes = []
-    self.orig_selection = {}
-
-    # HACK: the case where the selection is actually "Do not use"; is a little
-    #       tricky to implement because you can't check for whether a package is
-    #       installed or any such thing. So let's keep a list of all the
-    #       "Do not use" radios, set those active first, then iterate through
-    #       orig_selection when doing a Reset.
-    self.no_drv = []
-    self.nonfree_drivers = 0
-    self.ui_building = False
-
-  def on_driver_changes_status(self, status):
-    print "Status: %d" % status
-    print self.transaction.interface().status
-    print self.transaction.interface().role
-    print self.transaction.interface().status
-
-  def on_driver_changes_progress(self, status, percentage):
-    self.button_driver_revert.set_visible(False)
-    self.button_driver_apply.set_visible(False)
-    self.button_driver_restart.set_visible(False)
-    self.button_driver_cancel.set_visible(True)
-    self.progress_bar.set_visible(True)
-
-    if status == 'refreshing':
-      self.label_driver_action.set_label(_("Refreshing repositories ..."))
-    elif status == 'downloading':
-      self.label_driver_action.set_label(_("Downloading packages..."))
-    else:
-      self.label_driver_action.set_label(_("Applying changes..."))
-
-    self.progress_bar.set_fraction(percentage)
-
-  def on_driver_changes_finish(self, status, code):
-    self.progress_bar.set_visible(False)
-    self.apply_spinner.set_visible(False)
-    self.apply_spinner.stop()
-    self.clear_changes()
-    self.yum_cache = YumCache()
-    self.set_driver_action_status()
-    self.update_label_and_icons_from_status()
-    self.button_driver_revert.set_visible(True)
-    self.button_driver_apply.set_visible(True)
-    self.button_driver_cancel.set_visible(False)
-    self.scrolled_window_drivers.set_sensitive(True)
-
-  def on_driver_changes_error(self, error_code, error_details):
-    print "odce: %s" % str(error_details)
-    self.on_driver_changes_revert()
-    self.set_driver_action_status()
-    self.update_label_and_icons_from_status()
-    self.button_driver_revert.set_visible(True)
-    self.button_driver_apply.set_visible(True)
-    self.button_driver_cancel.set_visible(False)
-    self.scrolled_window_drivers.set_sensitive(True)
-
-  def on_driver_changes_cancellable_changed(self, cancellable):
-    print "odccc: %s" % str(cancellable)
-    self.button_driver_cancel.set_sensitive(cancellable)
-
-  def on_driver_changes_apply(self, button):
-    installs = []
-    removals = []
-
-    for pkg in self.driver_changes:
-      if pkg.is_installed():
-
-        removals.append(pkg.name)
-
-        # akmods need any created kmods to also be removed
-        # assumes "akmod-name" packages produce "kmod-name-*" packages
-        if pkg.name.startswith('akmod-'):
-          # check if the kmod is installed
-          if not self.yum_cache.is_installed( pkg.name[1:] ):
-            print "searching for akmod subpackages: %s-*" % pkg.name[1:]
-
-            for p in self.yum_cache.search_installed( '%s-*' % pkg.name[1:] ):
-              removals.append(p.name)
-
-          else:
-            print 'only removing the akmod'
-
-      else:
-        installs.append(pkg.name)
-
-    print installs, removals
-
-    try:
-      self.transaction = YumTransaction(install=installs, remove=removals)
-#      self.transaction.connect("status-changed", self.on_driver_changes_status)
-      self.transaction.connect("progress-changed", self.on_driver_changes_progress)
-#      self.transaction.connect("cancellable-changed", self.on_driver_changes_cancellable_changed)
-#      self.transaction.connect("finished", self.on_driver_changes_finish)
-#      self.transaction.connect("error", self.on_driver_changes_error)
-      self.button_driver_revert.set_sensitive(False)
-      self.button_driver_apply.set_sensitive(False)
-      self.scrolled_window_drivers.set_sensitive(False)
-      self.apply_spinner.start()
-      self.apply_spinner.set_visible(True)
-
-      self.transaction.run()
-
-
-    except Exception as e:
-      print("Warning: install transaction not completed successfully: {}".format(e))
-
-    finally:
-      self.transaction.Unlock()
-      self.transaction.Exit()
-
-      # TODO: remove when we're TRULY async
-      self.progress_bar.set_visible(False)
-      self.apply_spinner.set_visible(False)
-      self.apply_spinner.stop()
-      self.clear_changes()
-
-      self.yum_cache = YumCache()
-      
-      if any('kmod-' in p for p in installs+removals):
-        self._reboot_required = True
-
-
-      self.set_driver_action_status()
-      self.update_label_and_icons_from_status()
-      self.button_driver_revert.set_visible(True)
-      self.button_driver_apply.set_visible(True)
-      self.button_driver_cancel.set_visible(False)
-      self.scrolled_window_drivers.set_sensitive(True)
-
-
-  def on_driver_changes_revert(self, button_revert=None):
-    # HACK: set all the "Do not use" first; then go through the list of the
-    #       actually selected drivers.
-    for button in self.no_drv:
-      button.set_active(True)
-
-    for alias in self.orig_selection:
-      button = self.orig_selection[alias]
-      button.set_active(True)
-
-    self.clear_changes()
-
-    self.button_driver_revert.set_sensitive(False)
-    self.button_driver_apply.set_sensitive(False)
-
-  def on_driver_changes_cancel(self, button_cancel):
-    self.transaction.cancel()
-    self.clear_changes()
-
-  def on_driver_restart_clicked(self, button_restart):
-    subprocess.call(['/usr/lib/indicator-session/gtk-logout-helper', '--shutdown'])
-
-  def clear_changes(self):
-    self.orig_selection = {}
-    self.driver_changes = []
-
-  def on_driver_selection_changed(self, button, modalias, pkg_name=None):
-    if self.ui_building:
-      return
-
-    pkg = None
-    try:
-      if pkg_name:
-        pkg = self.yum_cache[pkg_name]
-    except KeyError:
-      pass
-
-    if button.get_active():
-      if pkg in self.driver_changes:
-        self.driver_changes.remove(pkg)
-
-      if (pkg is not None
-          and modalias in self.orig_selection
-          and button is not self.orig_selection[modalias]):
-        self.driver_changes.append(pkg)
-    else:
-      if pkg in self.driver_changes:
-        self.driver_changes.remove(pkg)
-
-      # for revert; to re-activate the original radio buttons.
-      if modalias not in self.orig_selection:
-        self.orig_selection[modalias] = button
-
-      if (pkg is not None
-          and pkg not in self.driver_changes
-          and pkg.is_installed() ):
-        self.driver_changes.append(pkg)
-
-    self.button_driver_revert.set_sensitive(bool(self.driver_changes))
-    self.button_driver_apply.set_sensitive(bool(self.driver_changes))
-
-  def gather_device_data(self, device):
-    '''Get various device data used to build the GUI.
-
-    return a tuple of (overall_status string, icon, drivers dict).
-    the drivers dict is using this form:
-    {
-      "recommended/alternative": {
-        pkg_name: {
-          'selected': True/False
-          'description': 'description'
-          'builtin': True/False
-        }
-      }
-      "manually_installed": {
-        "manual": {
-          'selected': True,
-          'description': description_string
-        }
-      }
-      "no_driver": {
-        "no_driver": {
-          'selected': True/False,
-          'description': description_string
-        }
-      }
-    }
-
-    Please note that either manually_installed and no_driver are set to None if not applicable
-    (no_driver isn't present if there are builtins)
-    '''
-
-    possible_overall_status = {
-      'recommended': (_("This device is using the recommended driver."), "recommended-driver"),
-      'alternative': (_("This device is using an alternative driver."), "other-driver"),
-      'manually_installed': (_("This device is using a manually-installed driver."), "other-driver"),
-      'no_driver': (_("This device is not working."), "disable-device")
-    }
-
-    returned_drivers = {'recommended': {}, 'alternative': {}, 'manually_installed': {}, 'no_driver': {}}
-    have_builtin = False
-    one_selected = False
-
-    try:
-      if device['manual_install']:
-        returned_drivers['manually_installed'] = {True: {'selected': True, 'description': _("Continue using a manually installed driver")}}
-    except KeyError:
-      pass
-
-    for pkg_driver_name in device['drivers']:
-      current_driver = device['drivers'][pkg_driver_name]
-
-      # get general status
-      driver_status = 'alternative'
-      try:
-        if current_driver['recommended'] and current_driver['from_distro']:
-          driver_status = 'recommended'
-      except KeyError:
-        pass
-
-      builtin = False
-      try:
-        if current_driver['builtin']:
-          builtin = True
-          have_builtin = True
-      except KeyError:
-        pass
-
-      try:
-        pkg = self.yum_cache[pkg_driver_name]
-        installed  = pkg.is_installed()
-        description = _("Using {}").format(pkg.shortname)
-        #description = _("Using {} from {}").format(pkg.candidate.summary, pkg.shortname)
-      except KeyError:
-        print("WARNING: a driver ({}) doesn't have any available package associated: {}".format(pkg_driver_name, current_driver))
-        continue
-
-      # gather driver description
-      if current_driver['free']:
-        licence = _("open source")
-      else:
-        licence = _("proprietary")
-
-      if driver_status == 'recommended':
-        base_string = _("{base_description} ({licence}, tested)")
-      else:
-        base_string = _("{base_description} ({licence})")
-      description = base_string.format(base_description=description, licence=licence)
-
-      selected = False
-      if not builtin and not returned_drivers['manually_installed']:
-        selected = installed
-        if installed:
-          selected = True
-          one_selected = True
-
-      returned_drivers[driver_status].setdefault(pkg_driver_name, {'selected': selected, 'description': description, 'builtin': builtin})
-
-    # adjust making the needed addition
-    if not have_builtin:
-      selected = False
-
-      if not one_selected:
-        selected = True
-      returned_drivers["no_driver"] = {True: {'selected': selected, 'description': _("Do not use the device")}}
-
-    else:
-      # we have a builtin and no selection: builtin is the selected one then
-      if not one_selected:
-        for section in ('recommended', 'alternative'):
-          for pkg_name in returned_drivers[section]:
-            if returned_drivers[section][pkg_name]['builtin']:
-              returned_drivers[section][pkg_name]['selected'] = True
-
-    # compute overall status
-    for section in returned_drivers:
-      for keys in returned_drivers[section]:
-        if returned_drivers[section][keys]['selected']:
-          (overall_status, icon) = possible_overall_status[section]
-
-    return (overall_status, icon, returned_drivers)
-
-
-  def show_drivers(self):
-    self.ui_building = True
-    self.dynamic_device_status = {}
-
-    for device in sorted(self.devices.keys()):
-      (overall_status, icon, drivers) = self.gather_device_data(self.devices[device])
-
-      driver_status = Gtk.Image()
-      driver_status.set_valign(Gtk.Align.START)
-      driver_status.set_halign(Gtk.Align.CENTER)
-      driver_status.set_from_icon_name(icon, Gtk.IconSize.MENU)
-      device_box = Gtk.Box(spacing=6, orientation=Gtk.Orientation.HORIZONTAL)
-      device_box.pack_start(driver_status, False, False, 6)
-      device_detail = Gtk.Box(spacing=6, orientation=Gtk.Orientation.VERTICAL)
-      device_box.pack_start(device_detail, True, True, 0)
-
-      widget = Gtk.Label("{}: {}".format(self.devices[device].get('vendor', _('Unknown')), self.devices[device].get('model', _('Unknown'))))
-      widget.set_halign(Gtk.Align.START)
-      device_detail.pack_start(widget, True, False, 0)
-      widget = Gtk.Label("<small>{}</small>".format(overall_status))
-      widget.set_halign(Gtk.Align.START)
-      widget.set_use_markup(True)
-      device_detail.pack_start(widget, True, False, 0)
-      self.dynamic_device_status[device] = (driver_status, widget)
-
-      option_group = None
-      # define the order of introspection
-      for section in ('recommended', 'alternative', 'manually_installed', 'no_driver'):
-        for driver in drivers[section]:
-          radio_button = Gtk.RadioButton.new_with_label(None, drivers[section][driver]['description'])
-
-          if option_group:
-            radio_button.join_group(option_group)
-
-          else:
-            option_group = radio_button
-
-          device_detail.pack_start(radio_button, True, False, 0)
-          radio_button.set_active(drivers[section][driver]['selected'])
-
-          if section == 'no_driver':
-            self.no_drv.append(radio_button)
-
-          if section in ('manually_install', 'no_driver') or ('builtin' in drivers[section][driver] and drivers[section][driver]['builtin']):
-            radio_button.connect("toggled", self.on_driver_selection_changed, device)
-          else:
-            radio_button.connect("toggled", self.on_driver_selection_changed, device, driver)
-
-          if drivers['manually_installed'] and section != 'manually_installed':
-            radio_button.set_sensitive(False)
-
-      self.box_driver_detail.pack_start(device_box, False, False, 6)
-
-    if len( self.devices.keys() ) == 0:
-      l_title = Gtk.Label('<b>No additional drivers were identified for you hardware.</b>')
-      l_title.set_use_markup(True)
-      self.box_driver_detail.pack_start(l_title, True, True, 6)
-
-    self.ui_building = False
-    self.box_driver_detail.show_all()
-    self.set_driver_action_status()
-
-  def update_label_and_icons_from_status(self):
-    '''Update the current label and icon, computing the new device status'''
-
-    for device in self.devices:
-      (overall_status, icon, drivers) = self.gather_device_data(self.devices[device])
-      (driver_status, widget) = self.dynamic_device_status[device]
-
-      driver_status.set_from_icon_name(icon, Gtk.IconSize.MENU)
-      widget.set_label("<small>{}</small>".format(overall_status))
-
-  def set_driver_action_status(self):
-    # Update the label in case we end up having some kind of proprietary driver in use.
-    if (os.path.exists('/var/run/reboot-required')) or self._reboot_required:
-      self.label_driver_action.set_label(_("You need to restart the computer to complete the driver changes."))
-      self.button_driver_restart.set_visible(True)
-      self.window_main.set_urgency_hint(True)
-      return
-
-    self.nonfree_drivers = 0
-    for device in self.devices:
-      for pkg_name in self.devices[device]['drivers']:
-        pkg = self.yum_cache[pkg_name]
-
-        if not self.devices[device]['drivers'][pkg_name]['free'] and pkg.is_installed():
-          self.nonfree_drivers = self.nonfree_drivers + 1
-
-        if self.nonfree_drivers > 0:
-          self.label_driver_action.set_label( gettext.ngettext(
-            "%(count)d proprietary driver in use.",
-            "%(count)d proprietary drivers in use.", self.nonfree_drivers)
-            % { 'count': self.nonfree_drivers})
-
-        else:
-          self.label_driver_action.set_label(_("No proprietary drivers are in use."))
-
+    w.add(b)
+    w.connect('delete-event', self.close)
+    w.show_all()
+
+    self._window = w
+    self._appView = kv
 
   def run(self):
     signal.signal(signal.SIGINT, signal.SIG_DFL)
     Gtk.main()
 
-
   def close(self, p1, p2):
     Gtk.main_quit(p1, p2);
 
 
-app = App()
+app = PharlapApp()
 app.run()
 
