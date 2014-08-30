@@ -712,16 +712,17 @@ function PharlapCtrl($scope) {
   };
 
   // call the python-webkit bridge
-  $scope.pythonSend = function() {
+  $scope.emitPYTHON = function() {
     var _args = Array.prototype.slice.call(arguments);
 
     if( _args.length > 0 ) {
       var _command = {
-        "c": _args.shift(),
-        "a": _args
+        "signal": _args.shift(),
+        "message": _args
       }
 
-      document.title = angular.toJson(_command, false);
+      /* update document title */
+      document.title = '_BR::' + angular.toJson(_command, false);
     }
   }
 
@@ -740,12 +741,8 @@ function PharlapCtrl($scope) {
     $('.curtain').fadeOut('slow');
   });
 
-
-
-
   // INIT
-  $scope.pythonSend("reload_modules");
-  $scope.pythonSend("reload_devices");
+  $scope.emitPYTHON("post_init");
 }
 
 /*
@@ -830,7 +827,7 @@ $(document).ready( function() {
   app_rs = angular.element(document).scope();
 
   /* TODO: fake slow load */
-  setTimeout(function() { app_rs.$broadcast('appLoaded'); }, 5000);
+  /*setTimeout(function() { app_rs.$broadcast('appLoaded'); }, 5000); */
 });
 
 
