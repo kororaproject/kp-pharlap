@@ -230,39 +230,6 @@ class KororaAppView(WebKit2.WebView):
   def _context_menu_cb(self, view, context_menu, event, hit_test_result):
     return True
 
-  def _push_data(self, key, value):
-    self.run_javascript("app_rs.$apply( function() { app_rs.$broadcast('configUpdate', '%s', %s) });" % (k, json.dumps(v)), None, None, None)
-
-  def _push_config(self):
-    # we externaly inject a broadcast of the configUpdate event, wrapped in apply for angular's satisifaction
-    self.run_javascript("app_rs.$apply( function() { app_rs.$broadcast('configUpdate', 'config', %s) });" % json.dumps(self._config.toDict()), None, None, None)
-
-  def _load_changed_cb(self, view, event):
-    if event == WebKit2.LoadEvent.FINISHED:
-      # push config on every page load
-      #self._push_config()
-      pass
-
-  def _title_changed_cb(self, view, event):
-    _in = view.get_title()
-
-    # check for "_BR::" leader to determine we're crossing
-    # the python/JS bridge
-    if _in is None or not _in.startswith('_BR::'):
-      return
-
-    try:
-      _in = json.loads(_in[5:])
-
-      signal = _in.setdefault('signal', '')
-      message = _in.setdefault('message', [])
-
-      # emit our python/js bridge signal
-      self.emit('on-js', str(signal), message)
-
-    except:
-      return
-
   def _decide_policy_cb(self, view, decision, decision_type):
     if decision_type == WebKit2.PolicyDecisionType.NAVIGATION_ACTION:
 
@@ -301,6 +268,31 @@ class KororaAppView(WebKit2.WebView):
       # we have a legitimate page so let's load
       page = urllib.request.urlopen(uri)
 
+  def _load_changed_cb(self, view, event):
+    if event == WebKit2.LoadEvent.FINISHED:
+      # push config on every page load
+      #self._push_config()
+      pass
+
+  def _title_changed_cb(self, view, event):
+    _in = view.get_title()
+
+    # check for "_BR::" leader to determine we're crossing
+    # the python/JS bridge
+    if _in is None or not _in.startswith('_BR::'):
+      return
+
+    try:
+      _in = json.loads(_in[5:])
+
+      signal = _in.setdefault('signal', '')
+      message = _in.setdefault('message', [])
+
+      # emit our python/js bridge signal
+      self.emit('on-js', str(signal), message)
+
+    except:
+      return
 
 
 class PharlapApp(object):
