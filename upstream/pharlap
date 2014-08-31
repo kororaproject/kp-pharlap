@@ -215,18 +215,20 @@ class KororaAppView(WebKit2.WebView):
     WebKit2.WebView.__init__(self)
 
     # register signals
-    self.connect('load-changed', self._load_changed_cb)
+    self.connect('context-menu', self._context_menu_cb)
     self.connect('decide-policy', self._decide_policy_cb)
+    self.connect('load-changed', self._load_changed_cb)
     self.connect('notify::title', self._title_changed_cb)
 
     self.l_uri = None
 
     # disable right-click context menu
-    #self.get_settings().set_property('enable-default-context-menu', False)
     self.get_settings().set_property('enable-accelerated-2d-canvas', True)
     self.get_settings().set_property('enable-smooth-scrolling', True)
     self.get_settings().set_property('javascript-can-access-clipboard', True)
 
+  def _context_menu_cb(self, view, context_menu, event, hit_test_result):
+    return True
 
   def _push_data(self, key, value):
     self.run_javascript("app_rs.$apply( function() { app_rs.$broadcast('configUpdate', '%s', %s) });" % (k, json.dumps(v)), None, None, None)
