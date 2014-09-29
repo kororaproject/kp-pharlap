@@ -18,8 +18,6 @@ Common driver handler for additional devices.
 %prep
 %setup -q
 
-echo "WOOT: " %{python_sitelib}
-
 %install
 
 mkdir -p $RPM_BUILD_ROOT%{_bindir}
