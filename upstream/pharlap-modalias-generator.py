@@ -5,6 +5,7 @@ import json
 import os
 import pprint
 import re
+import rpm
 import subprocess
 import shutil
 
@@ -37,7 +38,7 @@ def module_class(ko, package=None):
   elif 'kernel/sound' in ko:
     c = 'sound'
 
-  print("ko: %s, class: %s" % (ko, c))
+  #print("ko: %s, class: %s" % (ko, c))
 
   return c
 
@@ -74,7 +75,35 @@ for f in available_rpms:
   # find the equivalent kmod if we're an akmod
   if rpm_name.startswith('akmod'):
     rpm_type = 'akmod'
-    continue
+
+    t1 = ("","","")
+    cv = None
+
+    # find the latest kmod for details
+    for v in available_rpms:
+      v_name, v_epoch, v_version, v_release = subprocess.check_output('rpm -qp --queryformat "%{name} %{epoch} %{version} %{release}" ' + v, shell=True).decode('utf8').split()
+
+      if v_epoch == '(none)':
+        v_epoch = "0"
+
+      if not v_name.startswith(rpm_name[1:]):
+        continue
+
+      v_ko_count = subprocess.check_output('rpm -qlp %s | grep ".ko$" | wc -l' % v, shell=True).decode('utf8').strip()
+
+      if int(v_ko_count) == 0:
+        continue
+
+      t2 = (v_epoch, v_version, v_release)
+
+      if rpm.labelCompare(t2, t1) > 0:
+        t1 = t2
+        cv = v
+
+    if cv is None:
+      continue
+
+    f = cv
 
   if rpm_name.startswith('kmod'):
     rpm_type = 'kmod'
@@ -89,7 +118,7 @@ for f in available_rpms:
 
   # extract the RPM tree
   print('Expanding ...')
-  ret = subprocess.call('rpmdev-extract ' + f, shell=True)
+  ret = subprocess.call('rpmdev-extract %s >/dev/null' % f, shell=True)
 
   cmd = 'find ' + pkg_dir + ' -name "*ko"'
   print('Finding: %s' % cmd)
@@ -97,13 +126,13 @@ for f in available_rpms:
 
   for ko in available_ko:
     # grab the name of the base filename sans the extension [.ko]
-    ko_name = os.path.basename(ko)[:-3]
-    print('KO: %s' % (ko_name))
+    ko_name = os.path.basename(ko)[:-3].replace('-', '_')
+#    print('KO: %s' % (ko_name))
 
     cmd = 'modinfo ' + ko + " | awk '/alias:/ {print $2}'"
     available_aliases = subprocess.check_output(cmd, shell=True).rstrip().decode('utf-8').split('\n')
 
-    print("Found %d aliases" % len(available_aliases))
+#    print("Found %d aliases" % len(available_aliases))
 
     for alias in available_aliases:
       # skip blank aliases
@@ -130,5 +159,5 @@ f = open(json_path, 'w')
 f.write( json.dumps(modalias_map) )
 f.close()
 
-pp = pprint.PrettyPrinter(indent=2)
-pp.pprint(modalias_map)
+#pp = pprint.PrettyPrinter(indent=2)
+#pp.pprint(modalias_map)

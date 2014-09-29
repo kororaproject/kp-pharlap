@@ -1,0 +1,419 @@
+#!/usr/bin/python3
+#
+# Copyright 2012-2014 "Korora Project" <dev@kororaproject.org>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the temms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+#
+
+import dnf
+import hawkey
+import inspect
+import json
+import os
+import pprint
+import signal
+import subprocess
+import sys
+import threading
+import urllib.request
+import webbrowser
+
+from Pharlap import detect
+from Pharlap.DNFCache import DNFCache
+
+# GTK
+from gi.repository import WebKit2, Gtk, GObject
+
+class _GIdleObject(GObject.GObject):
+  '''
+  Override gobject.GObject to always emit signals in the main thread
+  by emmitting on an idle handler
+  '''
+  def __init__(self):
+    GObject.GObject.__init__(self)
+
+  def emit(self, *args):
+    GObject.idle_add(GObject.GObject.emit, self, *args)
+
+class _GThread(threading.Thread, _GIdleObject):
+  '''
+  Thread which uses GObject signals to return information
+  to the GUI.
+  '''
+  __gsignals__ = {
+    "completed": (GObject.SIGNAL_RUN_LAST, GObject.TYPE_NONE, ()),
+    "progress":  (GObject.SIGNAL_RUN_LAST, GObject.TYPE_NONE, (GObject.TYPE_FLOAT,))
+  }
+
+  def __init__(self, target=None, args=(), kwargs={}):
+    threading.Thread.__init__(self, target=target, *args, **kwargs)
+    _GIdleObject.__init__(self)
+
+    self.daemon = True
+
+  def run(self):
+    threading.Thread.run(self)
+
+    self.emit("completed")
+
+class ThreadManager():
+  '''
+  Manages many _GThreads. This involves starting and stopping
+  said threads, and respecting a maximum num of concurrent threads limit
+  '''
+  def __init__(self, maxConcurrentThreads):
+    self.maxConcurrentThreads = maxConcurrentThreads
+
+    #stores all threads, running or stopped
+    self.threads = {}
+
+    #the pending thread args are used as an index for the stopped threads
+    self.pendingThreadArgs = []
+
+  def _register_thread_completed(self, thread, *args):
+    '''
+    Decrements the count of concurrent threads and starts any
+    pending threads if there is space
+    '''
+    del(self.threads[args])
+    running = len(self.threads) - len(self.pendingThreadArgs)
+
+    print("%s completed. %s running, %s pending" % (thread, running, len(self.pendingThreadArgs)))
+
+    if running < self.maxConcurrentThreads:
+      try:
+        args = self.pendingThreadArgs.pop()
+        print("Starting pending %s" % self.threads[args])
+        self.threads[args].start()
+      except IndexError: pass
+
+  def create(self, completedCb, progressCb, userData, target, *args, **kwargs):
+    '''
+    Makes a thread with args. The thread will be started when there is
+    a free slot
+    '''
+    running = len(self.threads) - len(self.pendingThreadArgs)
+
+    if args not in self.threads:
+      thread = _GThread(target=target, *args, **kwargs)
+
+      #signals run in the order connected. Connect the user completed
+      #callback first incase they wish to do something
+      #before we delete the thread
+      thread.connect("completed", completedCb, userData)
+      thread.connect("completed", self._register_thread_completed, *args)
+      thread.connect("progress", progressCb, userData)
+
+      #This is why we use args, not kwargs, because args are hashable
+      self.threads[args] = thread
+
+      if running < self.maxConcurrentThreads:
+        print("Starting %s" % thread)
+        self.threads[args].start()
+
+      else:
+        print("Queing %s" % thread)
+        self.pendingThreadArgs.append(args)
+
+  def stop_all(self, block=False):
+    '''
+    Stops all threads. If block is True then actually wait for the thread
+    to finish (may block the UI)
+    '''
+    for thread in self.threads.values():
+      thread.cancel()
+      if block:
+        if thread.isAlive():
+          thread.join()
+
+
+class PharlapConfig(object):
+  def __init__(self):
+    self._modaliases = detect.system_modaliases()
+    self._devices = {}
+    self._loaded_modules = {}
+
+    # store full path to our binary
+    self._pharlap_bin_path = os.path.abspath(inspect.getfile(inspect.currentframe()))
+
+    # store directory to our pharlap configuration
+    self._config_dir = os.path.expanduser('~/.config/korora/pharlap/')
+
+    # store full path to our autostart symlink
+    self._autostart_path = os.path.expanduser('~/.config/autostart/korora-pharlap.desktop')
+
+    # ensure our config directory exists
+    if not os.path.exists( self._config_dir ):
+      try:
+        os.makedirs( self._config_dir )
+      except OSError as e:
+        pass
+
+    # does autostart symlink exist
+    self._autostart = os.path.exists( self._autostart_path )
+
+
+  def post_init(self):
+    db = dnf.Base()
+    self._dnf_cache = DNFCache(db)
+    self.reload_devices()
+    self.reload_loaded_modules()
+
+  def reload_devices(self):
+    self._devices = detect.system_driver_packages(cache=self._dnf_cache, modaliases=self._modaliases)
+
+  def reload_loaded_modules(self):
+    self._loaded_modules = detect.loaded_modules_for_modaliases(modaliases=self._modaliases)
+
+  @property
+  def autostart(self):
+    return self._autostart
+
+  @autostart.setter
+  def autostart(self, state):
+    if( state and not os.path.exists( self._autostart_path ) ):
+      # create the autostart symlink
+      try:
+        os.symlink( '/usr/share/applications/korora-pharlap.desktop', self._autostart_path )
+      except OSError as e:
+        pass
+    elif( not state and os.path.exists( self._autostart_path ) ):
+      # remove the autostart symlink
+      try:
+        os.unlink( self._autostart_path )
+      except OSError as e:
+        pass
+
+    # determine autostart state based on absence of the disable file
+    self._autostart = os.path.exists( self._autostart_path )
+
+  @property
+  def devices(self):
+    return self._devices
+
+  @property
+  def loaded_modules(self):
+    return self._loaded_modules
+
+  @property
+  def modaliases(self):
+    return self._modaliases
+
+  def toDict(self):
+    return {
+      'devices':        self._devices,
+      'modaliases':     self._modaliases,
+      'loaded_modules': self._loaded_modules,
+    }
+
+class KororaAppView(WebKit2.WebView):
+  __gsignals__ = {
+    'on-js': (GObject.SIGNAL_RUN_LAST, None, (GObject.TYPE_STRING,GObject.TYPE_PYOBJECT,))
+  }
+
+  def __init__(self):
+    WebKit2.WebView.__init__(self)
+
+    # register signals
+    self.connect('context-menu', self._context_menu_cb)
+    self.connect('decide-policy', self._decide_policy_cb)
+    self.connect('load-changed', self._load_changed_cb)
+    self.connect('notify::title', self._title_changed_cb)
+
+    self.l_uri = None
+
+    # disable right-click context menu
+    self.get_settings().set_property('enable-accelerated-2d-canvas', True)
+    self.get_settings().set_property('enable-smooth-scrolling', True)
+    self.get_settings().set_property('enable_write_console_messages_to_stdout', True)
+    self.get_settings().set_property('javascript-can-access-clipboard', True)
+
+  def _context_menu_cb(self, view, context_menu, event, hit_test_result):
+    return True
+
+  def _decide_policy_cb(self, view, decision, decision_type):
+    if decision_type == WebKit2.PolicyDecisionType.NAVIGATION_ACTION:
+
+      # grab the requested URI
+      uri = decision.get_request().get_uri()
+
+      # TODO: improve separation of HTML5 hash bang versus inline anchors
+      try:
+        if uri.index('#') > 0:
+          uri = uri[:uri.index('#')]
+      except ValueError as e:
+        pass
+
+      # don't reload ourself ( side effect of managing inline anchors )
+      if uri == self.l_uri:
+        return
+      # TODO: end
+
+      # process command URIs
+      if uri.startswith('cmd://'):
+        self._do_command(uri)
+        decision.ignore()
+        return
+
+      # process absolute URIs
+      # open links in a new tab in the default browser
+      if uri.startswith("http://") or \
+         uri.startswith("https://"):
+        decision.ignore()
+        webbrowser.open_new_tab(uri)
+        return
+
+      # store the requested URI for self checks
+      self.l_uri = uri
+
+      # we have a legitimate page so let's load
+      page = urllib.request.urlopen(uri)
+
+  def _load_changed_cb(self, view, event):
+    if event == WebKit2.LoadEvent.FINISHED:
+      # push config on every page load
+      #self._push_config()
+      pass
+
+  def _title_changed_cb(self, view, event):
+    _in = view.get_title()
+
+    # check for "_BR::" leader to determine we're crossing
+    # the python/JS bridge
+    if _in is None or not _in.startswith('_BR::'):
+      return
+
+    try:
+      _in = json.loads(_in[5:])
+
+      signal = _in.setdefault('signal', '')
+      message = _in.setdefault('message', [])
+
+      # emit our python/js bridge signal
+      self.emit('on-js', str(signal), message)
+
+    except:
+      return
+
+
+class PharlapApp(object):
+  def __init__(self):
+    self.manager = ThreadManager(3)
+
+    # load the config object
+    self._config = PharlapConfig()
+
+    # establish our location
+    self._location = os.path.dirname( os.path.abspath(inspect.getfile(inspect.currentframe())) )
+
+    # check for relative path
+    if( os.path.exists( os.path.join(self._location, 'data/' ) ) ):
+      print('Using relative path for data source. Non-production testing.')
+      self._data_path = os.path.join(self._location, 'data/')
+
+    elif( os.path.exists('/usr/share/pharlap/') ):
+      self._data_path = '/usr/share/pharlap/'
+
+    else:
+      print('Unable to source the pharlap data directory.')
+      sys.exit(1)
+
+    # build the app window
+    self._build_app()
+
+  def _build_app(self):
+    file = os.path.abspath( os.path.join( self._data_path, 'index.html') )
+    uri = 'file://' + urllib.request.pathname2url(file)
+
+    # build window
+    w = Gtk.Window()
+    w.set_position(Gtk.WindowPosition.CENTER)
+    w.set_wmclass('Pharlap', 'Pharlap')
+    w.set_title('Pharlap')
+    w.set_size_request(792, 496)
+
+    # build webkit container
+    kv = KororaAppView()
+
+    # load our index file
+    kv.load_uri(uri)
+
+    # TODO: Move to AppView
+    kv.connect('on-js', self.onJS)
+
+    # build scrolled window widget and add our appview container
+    sw = Gtk.ScrolledWindow()
+    sw.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+    sw.add(kv)
+
+    # build an autoexpanding box and add our scrolled window
+    b = Gtk.VBox(homogeneous=False, spacing=0)
+    b.pack_start(sw, expand=True, fill=True, padding=0)
+
+    # add the box to the parent window and show
+    w.add(b)
+    w.connect('delete-event', self.close)
+    w.show_all()
+
+    self._window = w
+    self._appView = kv
+
+  def run(self):
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    Gtk.main()
+
+  def close(self, p1, p2):
+    Gtk.main_quit(p1, p2);
+
+  #
+  # emitJS and onJS are the primary entry and exit points for the python/javascript bridge
+  def emitJS(self, signal, message={}):
+    self._appView.run_javascript("var _rs = angular.element(document).scope(); _rs.$apply( function() { _rs.$broadcast('%s', %s) });" % (signal, json.dumps(message)), None, None, None)
+
+  def onJS(self, thread, signal, message):
+    print("ON-JS: %s (%s)" % (signal, message))
+
+    if( signal == 'post_init' ):
+      self.manager.create( self._post_init_finished_cb, self._nop_progress_cb, None, self._config.post_init)
+
+    elif( signal == 'reload_devices' ):
+      self.manager.create( self.thread_finished, self.thread_progress, None, self._config.reload_devices)
+
+    elif( signal == 'reload_modules' ):
+      self.manager.create( self.thread_finished, self.thread_progress, None, self._config.reload_loaded_modules)
+
+    elif( signal == 'close' ):
+      Gtk.main_quit();
+
+    else:
+      print('Unknown signal received: %s' % signal)
+
+  def _nop_progress_cb(self, *args, **kwargs):
+    pass
+
+  def _post_init_finished_cb(self, thread, rowref):
+    self.emitJS('appLoaded')
+    self.emitJS('updateDevices', {'devices': self._config.devices})
+    self.emitJS('updateLoadedModules', {'loaded_modules': self._config.loaded_modules})
+    self.emitJS('updateModaliases', {'modaliases': self._config.modaliases})
+
+    pp = pprint.PrettyPrinter(indent=2)
+    pp.pprint(self._config.devices)
+    pp.pprint(self._config.loaded_modules)
+    pp.pprint(self._config.modaliases)
+
+
+app = PharlapApp()
+app.run()
+

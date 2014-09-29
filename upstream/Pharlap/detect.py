@@ -45,6 +45,7 @@ def load_modalias_map():
     return modalias_map
 
 
+
 def loaded_modules_for_modaliases(modaliases=None):
     ''' Get the loaded modules for the modalias list provided.
 
@@ -52,19 +53,53 @@ def loaded_modules_for_modaliases(modaliases=None):
     if not modaliases:
         modaliases = system_modaliases()
 
+    loaded_modules = {}
+
+    # get generic loaded module information
+    with open('/proc/modules', 'r') as f:
+        lsmod = f.read()
+
+        module_deps = []
+        for l in lsmod.split('\n'):
+            if not len(l):
+                continue
+
+            # ebtables 30758 3 ebtable_nat,ebtable_broute,ebtable_filter, Live 0xffffffffa07b8000
+            m = l.strip().split(' ')
+            loaded_modules[m[0]] = []
+
+            # check for dependencies
+            if m[3] != '-':
+                loaded_modules[m[0]] += m[3].strip(',').split(',')
+
+
     loaded = {}
 
     for alias in modaliases:
         alias_info = modaliases[ alias ]
 
-        # check loaded module
-        module_path = os.path.join(alias_info['syspath'], 'driver', 'module')
+        # check lspci
+        lspci_slot = modaliases[alias]['syspath'].split('/')[-1]
+        m = subprocess.check_output("lspci -kmvvD -s %s | awk '/(Driver|Module):/ { print $2 }'" % (lspci_slot), shell=True).decode('UTF-8').strip().replace('-', '_').split('\n')
 
-        if os.path.exists(module_path):
-            # TODO: get package info for loaded module
-            # rpm -qf --queryformat "$%{name}" $(modinfo -F filename module_name)
+        modules = []
+        if len(m):
+            for _m in m:
+                modules += loaded_modules.get(_m, []) + [_m]
+
+        else:
+            # check loaded module
+            module_path = os.path.join(alias_info['syspath'], 'driver', 'module')
+
+            if os.path.exists(module_path):
+                # TODO: get package info for loaded module
+                # rpm -qf --queryformat "$%{name}" $(modinfo -F filename module_name)
+                module = os.path.basename(os.path.realpath(module_path))
+                modules = loaded_modules.get(module, []) + [module]
+
+        if len(modules):
             loaded[ alias ] = {
-                'module': os.path.basename(os.path.realpath(module_path)),
+                'module':  list(set(modules)),
                 'package': ''
             }
 
@@ -248,7 +283,6 @@ def drivers_for_modalias(cache, modalias_map, modalias):
 
     return [ alias for alias in bus_map  if fnmatch.fnmatch(modalias, alias) ]
 
-
 def _is_package_free(pkg):
     assert pkg.candidate is not None
 
@@ -356,7 +390,7 @@ def _get_db_name(syspath, alias):
                   alias, vendor_name, device_name)
     return (vendor_name, device_name)
 
-def system_driver_packages(cache=None, modaliases=None):
+def system_driver_packages(cache=None, modaliases=None, progress_cb=None):
     '''Get driver packages that are available for the system.
 
     This calls system_modaliases() to determine the system's hardware and then
@@ -399,14 +433,29 @@ def system_driver_packages(cache=None, modaliases=None):
 
     devices = {}
 
-    for alias, alias_info in modaliases.items():
-        print("Checking alias %s ..." % alias)
+    modaliases_items = modaliases.items()
+
+    if progress_cb is None:
+      progress_cb = lambda *x, **y: None
+
+    total_items = len(modaliases_items)
+    item_count = 0.0
+
+    for alias, alias_info in modaliases_items:
+        # show some progress love
+        item_count += 0.5
+        progress_cb(int(item_count * 100 / total_items), alias)
+
+        print("Checking alias %s (%d%%) ..." % (alias, (100 * item_count / total_items)))
 
         matched_aliases   = drivers_for_modalias(cache, modalias_map, alias)
 
         # continue if not matches found
         if not matched_aliases:
+            item_count += 0.5
             continue
+
+        item_count += 0.5
 
         bus = alias.split(':')[0]
 
@@ -419,6 +468,7 @@ def system_driver_packages(cache=None, modaliases=None):
         })
 
         suitable_packages = set()
+        modules_classes = []
 
         for m in matched_aliases:
             for p in modalias_map[ bus ][ m ].keys():
@@ -428,21 +478,26 @@ def system_driver_packages(cache=None, modaliases=None):
 
                 suitable_packages.add( p )
 
-                device.setdefault('class', p_details['class'])
+                modules_classes.append( p_details.get('class', 'other') )
 
                 driver = device['drivers'].setdefault(package.name, {
                     'version': package.version,
                     'summary': package.summary,
                     'free': _is_package_free(package),
                     'from_distro': _is_package_from_distro(package),
-                    'modules' : {}
+                    'modules': []
                 })
 
+                modules = driver.get('modules', [])
                 module = p_details['module']
-                driver['modules'].setdefault(module, {
-                    'quirks': '',
-                    'blacklisted': False
-                })
+
+                if module not in modules:
+                  modules.append(module)
+
+        device.setdefault('class', max(set(modules_classes), key=modules_classes.count))
+
+        # show some progress love
+        progress_cb(int(item_count * 100 / total_items), alias)
 
 #    # Add "recommended" flags for NVidia alternatives
 #    nvidia_packages = [p for p in packages if p.endswith('kmod-nvidia')]
