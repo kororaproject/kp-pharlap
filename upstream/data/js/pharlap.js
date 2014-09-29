@@ -1,684 +1,137 @@
-/*
-** ANGULAR DEFINITIONS
-*/
-var app = angular.module("pharlap", []);
-//var app_rscope = angular.injector(['ng']).get('$rootScope');
-var app_rs;
+var app = angular.module("pharlap", ['lens.bridge', 'lens.ui']);
 
-app.directive('module-active-badge', function() {
-  return {
-    restrict: 'E',
-    scope: {
-      details: '=details'
-    },
-    template: '<span class="badge">ACTIVE</span>'
-  };
-});
-
-function PharlapCtrl($scope) {
-  $scope.config = {
-    arch:       'n/a',
-    codename:   'n/a',
-    desktop:    'n/a',
-    version:    'n/a',
-    live:       true,
-    auto_start: false,
+function PharlapCtrl($scope, $modal) {
+  $scope.curtain = {
+    progress: 0,
+    message: 'Reading repository information ...'
   };
 
-  $scope.devices = {
-    "/sys/devices/pci0000:00/0000:00:1b.0":{
-      "loaded":"snd_hda_intel",
-      "vendor":"Intel Corporation",
-      "model":"7 Series/C210 Series Chipset Family High Definition Audio Controller",
-      "modalias":"pci:v00008086d00001E20sv00008086sd00007270bc04sc03i00",
-      "drivers":{
-        "kernel":{
-          "version":"3.15.10",
-          "modules":{
-            "snd-hda-intel":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":true,
-          "free":false,
-          "summary":"The Linux kernel"
-        }
-      },
-      "class":"sound"
-    },
-    "/sys/devices/pci0000:00/0000:00:1c.1/0000:02:00.0":{
-      "loaded":"bcma",
-      "vendor":"Broadcom Corporation",
-      "model":"BCM4331 802.11a/b/g/n",
-      "modalias":"pci:v000014E4d00004331sv0000106Bsd000000F5bc02sc80i00",
-      "drivers":{
-        "kmod-wl-3.13.4-200.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.13.4-200.fc20.x86_64"
-        },
-        "kernel":{
-          "version":"3.15.10",
-          "modules":{
-            "bcma":{
-              "loaded":false,
-              "quirks":"host=0",
-              "blacklisted":true
-            }
-          },
-          "from_distro":true,
-          "free":false,
-          "summary":"The Linux kernel"
-        },
-        "kmod-wl-3.12.6-300.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":true
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.12.6-300.fc20.x86_64"
-        },
-        "kmod-wl-3.12.7-300.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.12.7-300.fc20.x86_64"
-        },
-        "kmod-wl-3.12.10-300.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.12.10-300.fc20.x86_64"
-        },
-        "kmod-wl-3.13.9-200.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.13.9-200.fc20.x86_64"
-        },
-        "kmod-wl-3.14.9-200.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.14.9-200.fc20.x86_64"
-        },
-        "kmod-wl-3.14.4-200.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.14.4-200.fc20.x86_64"
-        },
-        "kmod-wl-3.12.9-301.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.12.9-301.fc20.x86_64"
-        },
-        "kmod-wl-3.13.7-200.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.13.7-200.fc20.x86_64"
-        },
-        "kmod-wl-3.12.8-300.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.12.8-300.fc20.x86_64"
-        },
-        "kmod-wl-3.15.5-200.fc20.x86_64":{
-          "version":"6.30.223.248",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.15.5-200.fc20.x86_64"
-        },
-        "kmod-wl-3.14.1-200.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.14.1-200.fc20.x86_64"
-        },
-        "kmod-wl-3.14.8-200.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.14.8-200.fc20.x86_64"
-        },
-        "kmod-wl-3.13.8-200.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.13.8-200.fc20.x86_64"
-        },
-        "kmod-wl-3.15.7-200.fc20.x86_64":{
-          "version":"6.30.223.248",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.15.7-200.fc20.x86_64"
-        },
-        "kmod-wl-3.11.10-301.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted": true
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.11.10-301.fc20.x86_64"
-        },
-        "kmod-wl-3.14.5-200.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.14.5-200.fc20.x86_64"
-        },
-        "kmod-wl-3.13.10-200.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.13.10-200.fc20.x86_64"
-        },
-        "kmod-wl-3.13.5-200.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.13.5-200.fc20.x86_64"
-        },
-        "kmod-wl-3.15.8-200.fc20.x86_64":{
-          "version":"6.30.223.248",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.15.8-200.fc20.x86_64"
-        },
-        "kmod-wl-3.14.7-200.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.14.7-200.fc20.x86_64"
-        },
-        "kmod-wl-3.13.3-201.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.13.3-201.fc20.x86_64"
-        },
-        "kmod-wl-3.14.6-200.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.14.6-200.fc20.x86_64"
-        },
-        "kmod-wl-3.15.6-200.fc20.x86_64":{
-          "version":"6.30.223.248",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.15.6-200.fc20.x86_64"
-        },
-        "kmod-wl-3.14.2-200.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.14.2-200.fc20.x86_64"
-        },
-        "kmod-wl-3.12.5-302.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.12.5-302.fc20.x86_64"
-        },
-        "kmod-wl-3.15.10-200.fc20.x86_64":{
-          "version":"6.30.223.248",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.15.10-200.fc20.x86_64"
-        },
-        "kmod-wl-3.14.3-200.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.14.3-200.fc20.x86_64"
-        },
-        "kmod-wl-3.13.6-200.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.13.6-200.fc20.x86_64"
-        },
-        "kmod-wl-3.15.9-200.fc20.x86_64":{
-          "version":"6.30.223.248",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.15.9-200.fc20.x86_64"
-        },
-        "kmod-wl-3.15.4-200.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.15.4-200.fc20.x86_64"
-        },
-        "kmod-wl-3.12.9-300.fc20.x86_64":{
-          "version":"6.30.223.141",
-          "modules":{
-            "wl":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":false,
-          "free":false,
-          "summary":"wl kernel module(s) for 3.12.9-300.fc20.x86_64"
-        }
-      },
-      "class":"network"
-    },
-    "/sys/devices/pci0000:00/0000:00:1c.2/0000:03:00.0":{
-      "loaded":"firewire_ohci",
-      "vendor":"LSI Corporation",
-      "model":"FW643 [TrueFire] PCIe 1394b Controller",
-      "modalias":"pci:v000011C1d00005901sv000011C1sd00005900bc0Csc00i10",
-      "drivers":{
-        "kernel":{
-          "version":"3.15.10",
-          "modules":{
-            "firewire-ohci":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":true,
-          "free":false,
-          "summary":"The Linux kernel"
-        }
-      },
-      "class":"other"
-    },
-    "/sys/devices/pci0000:00/0000:00:1f.3":{
-      "loaded":null,
-      "vendor":"Intel Corporation",
-      "model":"7 Series/C210 Series Chipset Family SMBus Controller",
-      "modalias":"pci:v00008086d00001E22sv00008086sd00007270bc0Csc05i00",
-      "drivers":{
-        "kernel":{
-          "version":"3.15.10",
-          "modules":{
-            "i2c-i801":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":true,
-          "free":false,
-          "summary":"The Linux kernel"
-        }
-      },
-      "class":"other"
-    },
-    "/sys/devices/pci0000:00/0000:00:1c.0/0000:01:00.1":{
-      "loaded":"sdhci_pci",
-      "vendor":"Broadcom Corporation",
-      "model":"BCM57765/57785 SDXC/MMC Card Reader",
-      "modalias":"pci:v000014E4d000016BCsv000014E4sd00000000bc08sc05i01",
-      "drivers":{
-        "kernel":{
-          "version":"3.15.10",
-          "modules":{
-            "sdhci-pci":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":true,
-          "free":false,
-          "summary":"The Linux kernel"
-        }
-      },
-      "class":"other"
-    },
-    "/sys/devices/pci0000:00/0000:00:1c.0/0000:01:00.0":{
-      "loaded":"tg3",
-      "vendor":"Broadcom Corporation",
-      "model":"NetXtreme BCM57765 Gigabit Ethernet PCIe",
-      "modalias":"pci:v000014E4d000016B4sv000014E4sd000016B4bc02sc00i00",
-      "drivers":{
-        "kernel":{
-          "version":"3.15.10",
-          "modules":{
-            "tg3":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":true,
-          "free":false,
-          "summary":"The Linux kernel"
-        }
-      },
-      "class":"network"
-    },
-    "/sys/devices/pci0000:00/0000:00:16.0":{
-      "loaded":"mei_me",
-      "vendor":"Intel Corporation",
-      "model":"7 Series/C210 Series Chipset Family MEI Controller #1",
-      "modalias":"pci:v00008086d00001E3Asv00008086sd00007270bc07sc80i00",
-      "drivers":{
-        "kernel":{
-          "version":"3.15.10",
-          "modules":{
-            "mei-me":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":true,
-          "free":false,
-          "summary":"The Linux kernel"
-        }
-      },
-      "class":"other"
-    },
-    "/sys/devices/pci0000:00/0000:00:02.0":{
-      "loaded":"drm",
-      "vendor":"Intel Corporation",
-      "model":"3rd Gen Core processor Graphics Controller",
-      "modalias":"pci:v00008086d00000166sv0000106Bsd000000FAbc03sc00i00",
-      "drivers":{
-        "kernel":{
-          "version":"3.15.10",
-          "modules":{
-            "i915":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":true,
-          "free":false,
-          "summary":"The Linux kernel"
-        }
-      },
-      "class":"graphics"
-    },
-    "/sys/devices/pci0000:00/0000:00:1f.0":{
-      "loaded":"lpc_ich",
-      "vendor":"Intel Corporation",
-      "model":"HM77 Express Chipset LPC Controller",
-      "modalias":"pci:v00008086d00001E57sv00008086sd00007270bc06sc01i00",
-      "drivers":{
-        "kernel":{
-          "version":"3.15.10",
-          "modules":{
-            "lpc_ich":{
-              "loaded":false,
-              "quirks":"",
-              "blacklisted":false
-            }
-          },
-          "from_distro":true,
-          "free":false,
-          "summary":"The Linux kernel"
-        }
-      },
-      "class":"other"
-    }
+  $scope.types = ['input', 'graphics', 'network', 'sound', 'other'];
+
+  $scope.data = {
+    devices: {},
+    modules: {},
+    loaded_modules: {},
+    modaliases: {},
   };
 
-  $scope.driverHasModules = function(dv) {
-    return dv.hasOwnProperty('modules') && Object.keys(dv.modules).length > 0;
+  $scope.settings = {
+    show_akmods: true,
+    show_kmods: false,
+    blacklist_other: true
   };
 
-  $scope.getModuleLoadedLabel = function(pv, m) {
-    return ( pv.hasOwnProperty('loaded') && pv.loaded === m ) ? 'Loaded' : '';
+  $scope.system = {
+    arch:       '64-bit (x64_64)',
+    distribution: {
+      name:     'Korora',
+      codename: 'Peach',
+      desktop:  'GNOME',
+      version:  '20',
+      live:     true,
+    },
+    memory: {
+      total:      8080964,
+      free:       256456,
+      available:  2477224,
+      buffers:    264148,
+      cached:     2207288,
+      swapCached: 24248,
+      swapTotal:  8142844,
+      swapFree:   7535684
+    },
+    cpu: {
+      model: 'Intel(R) Core(TM) i7-3520M CPU @ 2.90GHz',
+      sockets: 1,
+      cores_per_sockets: 2,
+      threads_per_core: 2,
+      clock:    3577.648,
+      clockMax: 3600.0000,
+      clockMin: 1200.0000
+    },
+    current_kernel: ''
   };
 
-  $scope.getModuleBlacklistedLabel = function(mv) {
-    return ( mv.hasOwnProperty('blacklisted') && mv.blacklisted ) ? 'Blacklisted' : '';
-  };
+  $scope.openModuleSettingsModal = function(name, settings) {
 
-  $scope.formatHideZero = function(c) {
-    return c > 0 ? c : "";
-  };
-
-  $scope.hasQuirks = function(mv) {
-    return mv.hasOwnProperty('quirks') && mv.quirks.length > 0;
-  };
-
-  $scope.countDeviceByClass = function(c) {
-    var count = 0;
-
-    angular.forEach($scope.devices, function(v, k) {
-      if( v.hasOwnProperty('class') && v['class'] == c ) {
-        count++;
+    var modalInstance = $modal.open({
+      backdrop: 'static',
+      controller: PharlapModuleSettingsModalCtrl,
+      size: 'lg',
+      templateUrl: 'moduleSettingsModal.html',
+      resolve: {
+        data: function() {
+          return {
+            name: name,
+            settings: angular.copy(settings)
+          };
+        }
       }
     });
 
-    return count;
+    modalInstance.result.then(function(data) {
+      if( data.hasOwnProperty('name') &&
+          data.hasOwnProperty('settings') ) {
+        $scope.data.modules[data.name] = data.settings;
+
+        /* update module information */
+        $scope.processDevices();
+      }
+    });
   };
 
-  $scope.filterDeviceByClass = function(c) {
+  $scope.openModuleSettings = function(name) {
+    var settings = {};
+    if( $scope.data.modules.hasOwnProperty(name) ) {
+      settings = $scope.data.modules[name];
+    }
+
+    $scope.openModuleSettingsModal(name, settings);
+  };
+
+  $scope.countDeviceByClass = function(filter) {
+    var result = 0;
+
+    angular.forEach($scope.data.devices, function(v, k) {
+      if( v.hasOwnProperty('class') && v['class'] === filter ) {
+        result++
+      }
+    });
+
+    return result > 0 ? result : '';
+  };
+
+  $scope.filterDeviceByClass = function(filter) {
     var result = {};
 
-    angular.forEach($scope.devices, function(v, k) {
-      if( v.hasOwnProperty('class') && v['class'] == c ) {
+    angular.forEach($scope.data.devices, function(v, k) {
+      if( v.hasOwnProperty('class') && v['class'] === filter ) {
+        result[k] = v;
+      }
+    });
+
+    return result;
+  };
+
+  $scope.filterDrivers = function(drivers) {
+    var result = {};
+    var _kernel = '-' + $scope.system.current_kernel;
+
+    angular.forEach(drivers, function(v, k) {
+      /* process akmods */
+      if( k.indexOf('akmod') === 0 ) {
+        if( $scope.settings.show_akmods ) {
+          result[k] = v;
+        }
+      }
+      /* process kmods */
+      else if( (k.indexOf('kmod') === 0) ) {
+        if( $scope.settings.show_kmods && k.indexOf(_kernel) > 0 ) {
+          result[k] = v;
+        }
+      }
+      /* process everything else */
+      else {
         result[k] = v;
       }
     });
@@ -687,10 +140,13 @@ function PharlapCtrl($scope) {
   };
 
   $scope.selectDriver = function(device, driver) {
-    console.log(device);
-
     for(var d in device.drivers) {
-      device.drivers[d].selected = ( d === driver );
+      if( d === driver) {
+        device.drivers[d].selected = true;
+      }
+      else {
+        delete device.drivers[d].selected;
+      }
     }
   };
 
@@ -703,47 +159,115 @@ function PharlapCtrl($scope) {
            driver.hasOwnProperty('from_distro') && driver.from_distro;
   };
 
-  $scope.getRecommendation = function(driver) {
-    return $scope.isRecommended(driver) ? "recommended" : "";
-  };
-
   $scope.getIconName = function(e) {
     return 'logo-' + e.toLowerCase().replace(/ /, '-') + '.png';
   };
 
-  // call the python-webkit bridge
-  $scope.emitPYTHON = function() {
-    var _args = Array.prototype.slice.call(arguments);
+  $scope.driverHasModules = function(dv) {
+    return dv.hasOwnProperty('modules') && Object.keys(dv.modules).length > 0;
+  };
 
-    if( _args.length > 0 ) {
-      var _command = {
-        "signal": _args.shift(),
-        "message": _args
+  $scope.isLoaded = function(pv, m) {
+    return pv.hasOwnProperty('loaded') && pv.loaded.indexOf(m) !== -1;
+  };
+
+  $scope.isBlacklisted = function(name) {
+    modules = $scope.data.modules;
+    return modules.hasOwnProperty(name) && modules[name].blacklisted;
+  };
+
+  $scope.getQuirks = function(module) {
+    modules = $scope.data.modules;
+    return modules.hasOwnProperty(name) ? modules[name].options : '';
+  };
+
+  $scope.hasQuirks = function(module) {
+    modules = $scope.data.modules;
+    return modules.hasOwnProperty(name) && modules[name].options.length > 0;
+  };
+
+  $scope.processDevices = function() {
+    angular.forEach($scope.data.devices, function(v, k) {
+
+      /* decorate with loaded */
+      if( $scope.data.loaded_modules.hasOwnProperty(v.modalias) ) {
+        v.loaded = $scope.data.loaded_modules[v.modalias].module;
       }
 
-      /* update document title */
-      document.title = '_BR::' + angular.toJson(_command, false);
-    }
-  }
+      /* decorate with module information */
+      if( v.hasOwnProperty('drivers') && v.hasOwnProperty('loaded') ) {
+        angular.forEach(v.drivers, function(dv, dk) {
+          /* driver is selected if it contains the module that's loaded */
+          if( dv.hasOwnProperty('modules') && v.loaded.length > 0 ) {
+            for( var _i=0, _l=v.loaded.length; _i<_l; _i++ ) {
+              if( dv.modules.indexOf(v.loaded[_i]) !== -1 ) {
+                dv.selected = true;
+                break;
+              }
+            }
+          }
+        });
+      }
+    });
+  };
+
+  $scope.hasChanges = function() {
+    _m = angular.equals($scope.data._modules, $scope.data.modules);
+    _d = angular.equals($scope.data._devices, $scope.data.devices);
+
+    console.log($scope.data._devices, $scope.data.devices);
+
+    return  _m && _d;
+  };
+
+  $scope.revertChanges = function() {
+    /* restore original configuration */
+    $scope.data.modules = angular.copy($scope.data._modules);
+    $scope.data.devices = angular.copy($scope.data._devices);
+  };
+
+  /* SIGNALS */
 
   // register to configuration updates
-  $scope.$on('configUpdate', function(e, k, v) {
-    $scope[k] = v;
-    console.log('config update: ' + k);
+  $scope.$on('update-progress', function(e, progress, message) {
+    $scope.curtain.progress = progress;
+    $scope.curtain.message = "Searching for packages that match your hardware ...";
   });
 
-
   // register for appLoaded state
-  $scope.$on('appLoaded', function(e) {
-    console.log('app loaded');
-
+  $scope.$on('init-complete', function(e) {
     $('.page-container').removeClass('hide');
     $('.curtain').fadeOut('slow');
   });
 
+
+  $scope.$on('init-config', function(e, k, ma, lm, d, m) {
+    $scope.system.current_kernel = k;
+    $scope.data.loaded_modules = lm;
+    $scope.data.devices = d;
+    $scope.data.modules = m;
+
+    $scope.processDevices();
+
+    $scope.data._modules = angular.copy($scope.data.modules);
+    $scope.data._devices = angular.copy($scope.data.devices);
+  });
+
   // INIT
-  $scope.emitPYTHON("post_init");
+  $scope.emit("init");
 }
+
+var PharlapModuleSettingsModalCtrl = function($scope, $modalInstance, data) {
+  $scope.data = data;
+
+  $scope.ok = function() {
+    $modalInstance.close($scope.data);
+  };
+
+  $scope.cancel = function() {
+    $modalInstance.dismiss('cancel');
+  };
+};
 
 /*
 ** PAGE HANDLER
@@ -798,9 +322,6 @@ $(document).ready( function() {
   /* bind to resize events */
   $(window).on('resize', resizeHelper);
 
-  /* turn on tooltips */
-  $("[data-toggle='tooltip']").tooltip();
-
   /* turn on tabs */
   $("[data-toggle='tab']").on('click', function(e) {
     e.preventDefault();
@@ -819,15 +340,16 @@ $(document).ready( function() {
     }
   });
 
+  $(".dial").knob({
+    readOnly: true,
+    width: 100,
+    angleOffset: -125,
+    angleArc: 250
+  });
+
   /* initial call to page resize helper */
   setTimeout(function() { resizeHelper(); $('.loader').fadeIn('slow')}, 0);
 
-
-  /* fetch the rootscope */
-  app_rs = angular.element(document).scope();
-
   /* TODO: fake slow load */
-  /*setTimeout(function() { app_rs.$broadcast('appLoaded'); }, 5000); */
+  //setTimeout(function() { angular.element(document).scope().$broadcast('appLoaded'); }, 3000);
 });
-
-

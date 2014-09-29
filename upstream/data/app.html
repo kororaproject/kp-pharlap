@@ -2,106 +2,77 @@
 <html lang="en" ng-app="pharlap">
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link href="css/bootstrap.min.css" rel="stylesheet" media="screen">
-  <link href="css/font-awesome.min.css" rel="stylesheet" media="screen">
-  <link href="css/welcome.css" rel="stylesheet" media="screen">
+  <link href="lens://css/lens.css" rel="stylesheet" media="screen">
+  <link href="app://css/pharlap.css" rel="stylesheet" media="screen">
 </head>
 <body class="unselectable" ng-controller="PharlapCtrl">
   <div class="curtain">
-    <div class="curtain-loader">
-      <div class="loader" style="display: none;">
-        <div id="loader-1"></div>
-        <div id="loader-2"></div>
-        <div id="loader-3"></div>
-        <div id="loader-4"></div>
-        <div id="loader-5"></div>
-      </div>
+    <div class="curtain-loader" ng-cloak>
+      <progressbar class="progress-xs progress-striped active" value="curtain.progress"></progressbar>
+      <p class="status">{{curtain.message}}</p>
     </div>
   </div>
   <div class="page-container hide">
     <nav id="korobar" class="navbar navbar-default navbar-empty" role="navigation"></nav>
 
-    <div class="page-content navbar-empty">
+    <div class="page-content no-nav">
       <div class="container">
         <div class="row">
           <div class="col-sm-3">
             <div class="sidebar">
               <ul class="nav nav-tabs tabs-left">
-                <li><a href="#input" data-toggle="tab"><i class="fa fa-fw fa-keyboard-o"></i> Input <span class="badge tab-badge">{{formatHideZero(countDeviceByClass('input'))}}</span></a></li>
-                <li><a href="#graphics" data-toggle="tab"><i class="fa fa-fw fa-desktop"></i> Graphics <span class="badge tab-badge">{{formatHideZero(countDeviceByClass('graphics'))}}</span></a></li>
-                <li class="active"><a href="#network" data-toggle="tab"><i class="fa fa-fw fa-signal"></i> Network <span class="badge tab-badge">{{formatHideZero(countDeviceByClass('network'))}}</span></a></li>
-                <li><a href="#sound" data-toggle="tab"><i class="fa fa-fw fa-volume-up"></i> Sound <span class="badge tab-badge">{{formatHideZero(countDeviceByClass('sound'))}}</span></a></li>
-                <li><a href="#other" data-toggle="tab"><i class="fa fa-fw fa-cogs"></i> Other <span class="badge tab-badge">{{formatHideZero(countDeviceByClass('other'))}}</span></a></li>
-                <li><a href="#settings" data-toggle="tab"><i class="fa fa-fw fa-wrench"></i> Settings</a></li>
+                <li class="active"><a href="#general" data-toggle="tab"><i class="fa fa-fw fa-info"></i> General</a></li>
+                <li><a href="#input" data-toggle="tab"><i class="fa fa-fw fa-keyboard-o"></i> Input <span class="badge tab-badge">{{countDeviceByClass('input')}}</span></a></li>
+                <li><a href="#graphics" data-toggle="tab"><i class="fa fa-fw fa-desktop"></i> Graphics <span class="badge tab-badge">{{countDeviceByClass('graphics')}}</span></a></li>
+                <li><a href="#network" data-toggle="tab"><i class="fa fa-fw fa-signal"></i> Network <span class="badge tab-badge">{{countDeviceByClass('network')}}</span></a></li>
+                <li><a href="#sound" data-toggle="tab"><i class="fa fa-fw fa-volume-up"></i> Sound <span class="badge tab-badge">{{countDeviceByClass('sound')}}</span></a></li>
+                <li><a href="#other" data-toggle="tab"><i class="fa fa-fw fa-cogs"></i> Other <span class="badge tab-badge">{{countDeviceByClass('other')}}</span></a></li>
+                <li><a href="#settings" data-toggle="tab"><i class="fa fa-fw fa-sliders"></i> Settings</a></li>
               </ul>
             </div>
           </div>
           <div class="col-sm-9">
             <div class="tab-content">
-              <div class="tab-pane fade" id="input">
-                <div ng-repeat="(path, pv) in filterDeviceByClass('input')" class="device-block">
-                  <img ng-src="img/{{getIconName(pv.vendor)}}" class="device-logo"></img>
-                  <div class="device-details">
-                    <h1>{{pv.model}}</h1>
-                    <h2>{{pv.vendor}}</h2>
-                    <ul class="fa-ul">
-                      <li ng-repeat="(driver,dv) in pv.drivers" ng-click="selectDriver(pv, driver)" class="click-target">
-                        <i class="fa-li fa" ng-class="{'fa-circle-o': !isSelected(dv), 'fa-dot-circle-o': isSelected(dv)}"></i>
-                        <div class="driver-details">
-                          <p><span class="title">{{driver}}</span> <span class="label label-success recommended">{{getRecommendation(dv)}}</span></p>
-                          <p class="version">Version: {{dv.version}}</p>
-                          <div ng-repeat="(module,mv) in dv.modules" class="">
-                            <p>Module: {{module}}</p>
-                            <p>Quirks: {{mv.quirks}}</p>
-                          </div>
-                        </div>
-                      </li>
-                    </ul>
-                  </div>
+              <div class="tab-pane fade in active" id="general">
+                <div>
+                  <h3>{{system.distribution.name}}</h3>
+                  <p>v{{system.distribution.version}} ({{system.distribution.codename}}) <span ng-hide="!system.distribution.live"> - Live</span></p>
                 </div>
-              </div>
-              <div class="tab-pane fade" id="graphics">
-                <div ng-repeat="(path, pv) in filterDeviceByClass('graphics')" class="device-block">
-                  <img ng-src="img/{{getIconName(pv.vendor)}}" class="device-logo"></img>
-                  <div class="device-details">
-                    <h1>{{pv.model}}</h1>
-                    <h2>{{pv.vendor}}</h2>
-                    <ul class="fa-ul">
-                      <li ng-repeat="(driver,dv) in pv.drivers" ng-click="selectDriver(pv, driver)" class="click-target">
-                        <i class="fa-li fa" ng-class="{'fa-circle-o': !isSelected(dv), 'fa-dot-circle-o': isSelected(dv)}"></i>
-                        <div class="driver-details">
-                          <p><span class="title">{{driver}}</span> <span class="label label-success recommended">{{getRecommendation(dv)}}</span></p>
-                          <p class="version">Version: {{dv.version}}</p>
-                          <ul class="fa-ul">
-                            <li ng-repeat="(module,mv) in dv.modules" class="">
-                              <p>Module: {{module}}</p>
-                              <p>Quirks: {{mv.quirks}}</p>
-                              <p>Blacklist: {{mv.blacklisted}} </p>
-                            </li>
-                          </ul>
-                        </div>
-                      </li>
-                    </ul>
-                  </div>
+                <div>
+                  <h3>System</h3>
+                  <p>Architecture: {{system.arch}}</p>
+                  <p>CPU: {{system.cpu.model}}</p>
+                  <p>RAM: {{system.memory.total}} ({{system.memory.free}} available)</p>
+                  <p>Kernel: {{system.current_kernel}}</p>
                 </div>
+
+                <div class="hide">
+                  <input type="text" value="3577" class="dial dial-cpu" data-min="1200" data-max="3600">
+                  <input type="text" value="256456" class="dial dial-ram" data-min="0" data-max="8080964">
+                  <input type="text" value="7535684" class="dial dial-swap" data-min="0" data-max="8142844">
+                </div>
+
               </div>
-              <div class="tab-pane fade in active" id="network">
-                <div ng-repeat="(path, pv) in filterDeviceByClass('network')" class="device-block">
-                  <img ng-src="img/{{getIconName(pv.vendor)}}" class="device-logo"></img>
+              <div ng-repeat="type in types" class="tab-pane fade" id="{{type}}">
+                <div ng-hide="countDeviceByClass(type)">
+                  <h4 class="no-driver-label">No configurable {{type}} devices found.</h4>
+                </div>
+                <div ng-repeat="(path, pv) in filterDeviceByClass(type)" class="device-block">
+                  <img ng-src="app://img/{{getIconName(pv.vendor)}}" class="device-logo"></img>
                   <div class="device-details">
                     <h1>{{pv.model}}</h1>
                     <h2>{{pv.vendor}}</h2>
                     <ul class="fa-ul">
-                      <li ng-repeat="(driver,dv) in pv.drivers" ng-click="selectDriver(pv, driver)" class="click-target">
+                      <li ng-repeat="(driver,dv) in filterDrivers(pv.drivers)" ng-click="selectDriver(pv, driver)" class="click-target">
                         <i class="fa-li fa" ng-class="{'fa-circle-o': !isSelected(dv), 'fa-dot-circle-o': isSelected(dv)}"></i>
                         <div class="driver-details">
-                          <p><span class="title">{{driver}}</span> <span class="version">({{dv.version}})</version> <span class="label label-success recommended">{{getRecommendation(dv)}}</span></p>
+                          <p><span class="title">{{driver}}</span> <span class="version">({{dv.version}})</span></p>
                           <div class="device-modules" ng-hide="!driverHasModules(dv)">
                             <ul>
-                              <li ng-repeat="(module,mv) in dv.modules" class="">
-                                <button class="btn btn-xs btn-default pull-right"><i class="fa fa-fw fa-cog"></i></button>
-                                <p>Module: {{module}}<span class="label label-black">{{getModuleBlacklistedLabel(mv)}}</span><span class="label label-success">{{getModuleLoadedLabel(pv, module)}}</span></p>
-                                <p ng-hide="!hasQuirks(mv)">Quirks: {{mv.quirks}}</p>
+                              <li ng-repeat="module in dv.modules" class="">
+                                <button class="btn btn-xs btn-default pull-right" ng-click="openModuleSettings(module); $event.stopPropagation();"><i class="fa fa-fw fa-cog"></i></button>
+                                <p>Module: {{module}}<span ng-hide="!isBlacklisted(module)" class="label label-black" tooltip="Blacklisted"><i class="fa fa-fw fa-ban"></i></span><span ng-hide="!isLoaded(pv, module)" class="label label-default" tooltip="Loaded"><i class="fa fa-fw fa-check"></i></span><span ng-hide="!isRecommended(dv)" class="label label-success recommended" tooltip="Recommended"><i class="fa fa-fw fa-thumbs-o-up"></i></span></p>
+                                <p ng-hide="!hasQuirks(module)">Quirks: {{getQuirks(module)}}</p>
                               </li>
                             </ul>
                           </div>
@@ -111,60 +82,21 @@
                   </div>
                 </div>
               </div>
-              <div class="tab-pane fade" id="sound">
-                <div ng-repeat="(path, pv) in filterDeviceByClass('sound')" class="device-block">
-                  <img ng-src="img/{{getIconName(pv.vendor)}}" class="device-logo"></img>
-                  <div class="device-details">
-                    <h1>{{pv.model}}</h1>
-                    <h2>{{pv.vendor}}</h2>
-                    <ul class="fa-ul">
-                      <li ng-repeat="(driver,dv) in pv.drivers" ng-click="selectDriver(pv, driver)" class="click-target">
-                        <i class="fa-li fa" ng-class="{'fa-circle-o': !isSelected(dv), 'fa-dot-circle-o': isSelected(dv)}"></i>
-                        <div class="driver-details">
-                          <p><span class="title">{{driver}}</span> <span class="label label-success recommended">{{getRecommendation(dv)}}</span></p>
-                          <p class="version">Version: {{dv.version}}</p>
-                          <p class="summary">{{dv.summary}}</p>
-                          <ul class="fa-ul">
-                            <li ng-repeat="(module,mv) in dv.modules" class="">
-                              <p>Module: {{module}}</p>
-                              <p>Quirks: {{mv.quirks}}</p>
-                              <p>Blacklist: {{mv.blacklisted}} </p>
-                            </li>
-                          </ul>
-                        </div>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-              <div class="tab-pane fade" id="other">
-                <div ng-repeat="(path, pv) in filterDeviceByClass('other')" class="device-block">
-                  <img ng-src="img/{{getIconName(pv.vendor)}}" class="device-logo"></img>
-                  <div class="device-details">
-                    <h1>{{pv.model}}</h1>
-                    <h2>{{pv.vendor}}</h2>
-                    <ul class="fa-ul">
-                      <li ng-repeat="(driver,dv) in pv.drivers" ng-click="selectDriver(pv, driver)" class="click-target">
-                        <i class="fa-li fa" ng-class="{'fa-circle-o': !isSelected(dv), 'fa-dot-circle-o': isSelected(dv)}"></i>
-                        <div class="driver-details">
-                          <p><span class="title">{{driver}}</span> <span class="label label-success recommended">{{getRecommendation(dv)}}</span></p>
-                          <p class="version">Version: {{dv.version}}</p>
-                          <p class="summary">{{dv.summary}}</p>
-                          <ul class="fa-ul">
-                            <li ng-repeat="(module,mv) in dv.modules" class="">
-                              <p>Module: {{module}}</p>
-                              <p>Quirks: {{mv.quirks}}</p>
-                              <p>Blacklist: {{mv.blacklisted}} </p>
-                            </li>
-                          </ul>
-                        </div>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
               <div class="tab-pane fade" id="settings">
-                <p>I AM SETTINGS!</p>
+                <h3>Driver Packages</h3>
+                <div class="form-group">
+                  <checkbox ng-model="settings.show_akmods">Show available akmod packages</checkbox>
+                  <span class="help-block">akmod packages contain the modules in source code form. Provided there are no kernel API breaks, can be automatically built when a new kernels are released.</span>
+                </div>
+                <div class="form-group">
+                  <checkbox ng-model="settings.show_kmods">Show available kmod packages</checkbox>
+                  <span class="help-block">kmod packages contain compiled modules in pre-compiled form. They are built for a specific kernel and may not be immediately available when a new kernels are released.</span>
+                </div>
+                <h3>Blacklisting</h3>
+                <div class="form-group">
+                  <checkbox ng-model="settings.blacklist_other">Blacklist unselected modules for devices</checkbox>
+                  <span class="help-block">Blacklisting all other modules will minimise driver conflicts by preventing multiple modules from being loaded for a particular device.</span>
+                </div>
               </div>
             </div>
           </div>
@@ -178,19 +110,41 @@
       <div class="row">
         <div class="col-sm-8">
           <div class="form">
-            <p><a href="cmd://reload">Reload</a><i class="fa fa-fw fa-thumbs-o-up"></i> No proprietary drivers are in use.</p>
+            <p><i ng-click="mockDevices()" class="fa fa-fw fa-thumbs-o-up"></i> No proprietary drivers are in use.</p>
           </div>
         </div>
         <div class="col-sm-4 text-right">
-          <a id="close" href="cmd://close" class="btn btn-dark disabled">Revert</a>
-          <a id="close" href="cmd://close" class="btn btn-dark">Apply Changes</a>
+          <a id="close" href="cmd://close" class="btn btn-dark" ng-class="{disabled: hasChanges()}">Revert</a>
+          <a id="close" href="cmd://close" class="btn btn-dark" ng-class="{disabled: hasChanges()}">Apply Changes</a>
         </div>
       </div>
     </div>
   </footer>
-  <script src="js/jquery.min.js"></script>
-  <script src="js/angular.min.js"></script>
-  <script src="js/bootstrap.min.js"></script>
-  <script src="js/welcome.js"></script>
+
+  <script type="text/ng-template" id="moduleSettingsModal.html">
+    <div class="modal-header">
+      <h3 class="modal-title">Module Settings: {{data.name}}</h3>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Quirks</label>
+        <input class="form-control" type="text" ng-model="data.settings.options"></input>
+        <span class="help-block">Quirks provide a mechanism for additional parameters to be passed to the module when loading.</span>
+      </div>
+      <div class="form-group">
+        <label>Blacklist</label>
+        <checkbox ng-model="data.settings.blacklisted">Blacklist "{{data.name}}" module from loading</checkbox>
+        <span class="help-block">Blacklisting a module will prevent it being loaded into the kernel via the modprobe utilities.</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-sm btn-default" ng-click="cancel()">Cancel</button>
+      <button class="btn btn-sm btn-success" ng-click="ok()">OK</button>
+    </div>
+  </script>
+
+  <script src="lens://js/lens.js"></script>
+  <script src="app://js/jquery.knob.min.js"></script>
+  <script src="app://js/pharlap.js"></script>
 </body>
 </html>
