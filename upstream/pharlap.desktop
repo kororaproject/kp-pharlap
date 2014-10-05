@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Pharlap
 Comment=Configure third-party and proprietary drivers
-Icon=hwinfo
+Icon=hwbrowser
 Exec=/usr/bin/pharlap
 Terminal=false
 Type=Application
