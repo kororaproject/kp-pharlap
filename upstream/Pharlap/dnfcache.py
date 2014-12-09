@@ -13,7 +13,7 @@ class DNFCache(object):
     # we're a cache after all
     self._db.conf.releasever = dnf.rpm.detect_releasever( db.conf.installroot )
     subst = self._db.conf.substitutions
-    suffix = dnf.yum.parser.varReplace(dnf.const.CACHEDIR_SUFFIX, subst)
+    suffix = dnf.conf.parser.substitute(dnf.const.CACHEDIR_SUFFIX, subst)
     cli_cache = dnf.conf.CliCache(self._db.conf.cachedir, suffix)
     self._db.conf.cachedir = cli_cache.cachedir
     self._system_cachedir = cli_cache.system_cachedir

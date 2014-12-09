@@ -20,7 +20,7 @@ import rpm
 import subprocess
 
 from Pharlap import kerneldetection
-from Pharlap.DNFCache import DNFCache
+from Pharlap.dnfcache import DNFCache
 
 db = dnf.Base()
 system_architecture = dnf.arch.basearch( hawkey.detect_arch() )

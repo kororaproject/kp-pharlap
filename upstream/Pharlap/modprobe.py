@@ -4,7 +4,7 @@ import re
 
 
 
-class modprobe():
+class ModProbe():
 
 
   def __init__(self):
@@ -93,7 +93,7 @@ class modprobe():
 
 
 if __name__ == '__main__':
-  c = modprobe()
+  c = ModProbe()
   c.parse()
 
   pp = pprint.PrettyPrinter(indent=2)
