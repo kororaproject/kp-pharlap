@@ -8,6 +8,7 @@ import re
 import rpm
 import subprocess
 import shutil
+import time
 
 
 exclude_list = ['kmod-xtables-addons', 'akmod-xtables-addons']
@@ -22,11 +23,13 @@ def module_class(ko, package=None):
 
   # classify on package provided
   if package:
-    if package.startswith('kmod'):
+    if package.startswith('kmod') or package.startswith('akmod'):
       if ('-nvidia' in package) or ('-catalyst' in package):
         c = 'graphics'
       elif '-wl' in package:
         c = 'network'
+  else:
+    package = 'n/a';
 
   # classify based on file path
   if 'kernel/drivers/gpu' in ko:
@@ -37,8 +40,10 @@ def module_class(ko, package=None):
     c = 'input'
   elif 'kernel/sound' in ko:
     c = 'sound'
+  elif 'drivers/bcma' in ko:
+    c = 'network'
 
-  #print("ko: %s, class: %s" % (ko, c))
+  print("package: %s, ko: %s, class: %s" % (package, ko, c))
 
   return c
 
@@ -46,7 +51,7 @@ def module_class(ko, package=None):
 if not os.path.exists(output_dir):
   os.mkdir(output_dir)
   os.chdir(output_dir)
-  ret = subprocess.call(['yumdownloader', 'kernel']);
+  ret = subprocess.call(['yumdownloader', 'kernel-core', 'kernel-modules']);
   ret = subprocess.call(['yumdownloader', 'kmod-*']);
   ret = subprocess.call(['yumdownloader', 'akmod-*']);
 else:
@@ -120,13 +125,18 @@ for f in available_rpms:
   print('Expanding ...')
   ret = subprocess.call('rpmdev-extract %s >/dev/null' % f, shell=True)
 
-  cmd = 'find ' + pkg_dir + ' -name "*ko"'
-  print('Finding: %s' % cmd)
-  available_ko = subprocess.check_output(cmd, shell=True).rstrip().decode('utf-8').split('\n')
+  #time.sleep(30)
+  try:
+    cmd = 'find ' + pkg_dir + ' | egrep "\.ko(\.xz)?$"'
+    print('Finding: %s' % cmd)
+    available_ko = subprocess.check_output(cmd, shell=True).rstrip().decode('utf-8').split('\n')
+  except:
+    available_ko = [];
 
   for ko in available_ko:
     # grab the name of the base filename sans the extension [.ko]
-    ko_name = os.path.basename(ko)[:-3].replace('-', '_')
+    ko_name = re.sub(".ko(.xz)?", "", os.path.basename(ko).replace('-', '_'))
+
 #    print('KO: %s' % (ko_name))
 
     cmd = 'modinfo ' + ko + " | awk '/alias:/ {print $2}'"

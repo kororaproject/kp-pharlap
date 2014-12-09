@@ -21,11 +21,12 @@ import hawkey
 import logging
 import os
 
-from Lens.Thread import Thread
-from Lens.App import App
+from lens.thread import Thread
+from lens.app import App
 
-from Pharlap import detect, modprobe
-from Pharlap.DNFCache import DNFCache
+from Pharlap import detect
+from Pharlap.modprobe import ModProbe
+from Pharlap.dnfcache import DNFCache
 
 class DetectThread(Thread):
   def __init__(self, config, do_cache=False, do_modules=False, do_modaliases=False, do_devices=False):
@@ -33,7 +34,7 @@ class DetectThread(Thread):
 
     self._config = config
 
-    self._modprobe = modprobe.modprobe()
+    self._modprobe = ModProbe()
 
     self._build_cache = do_cache
     self._build_modules = do_modules
@@ -112,7 +113,7 @@ class PharlapConfig(object):
 
 app = App(name="Pharlap", width=792, height=496, inspector=True)
 
-app.namespaces.append('data')
+app.namespaces = ['/usr/share/pharlap', 'data']
 app.load_ui('app.html')
 
 db = dnf.Base()
@@ -122,10 +123,9 @@ config = PharlapConfig()
 def init_cb():
   t = DetectThread(config, do_cache=True, do_modules=True, do_modaliases=True, do_devices=True)
 
-  app.manager.on_thread(t, 'progress', _detect_thread_progress_cb)
-  app.manager.on_thread(t, 'complete', _detect_thread_complete_cb)
-
-  app.manager.add_thread(t)
+  app.threads.on(t, 'progress', _detect_thread_progress_cb)
+  app.threads.on(t, 'complete', _detect_thread_complete_cb)
+  app.threads.add(t)
 
 @app.connect('close')
 def close_cb():
