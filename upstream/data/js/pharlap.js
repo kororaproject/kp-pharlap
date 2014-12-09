@@ -215,8 +215,6 @@ function PharlapCtrl($scope, $modal) {
     _m = angular.equals($scope.data._modules, $scope.data.modules);
     _d = angular.equals($scope.data._devices, $scope.data.devices);
 
-    console.log($scope.data._devices, $scope.data.devices);
-
     return  _m && _d;
   };
 
@@ -338,13 +336,6 @@ $(document).ready( function() {
         return false;
       }
     }
-  });
-
-  $(".dial").knob({
-    readOnly: true,
-    width: 100,
-    angleOffset: -125,
-    angleArc: 250
   });
 
   /* initial call to page resize helper */
