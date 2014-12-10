@@ -125,3 +125,21 @@ footer { z-index: 1038; }
 }
 
 
+/*
+** NO-ANIMATIONS
+*/
+
+.modal.fade.no-animation {
+  opacity: 1!important;
+}
+
+.modal.fade.no-animation .modal-dialog ,
+.modal.in.no-aminmation .modal-dialog {
+  -webkit-transform: translate(0, 0);
+  -ms-transform: translate(0, 0);
+  transform: translate(0, 0);
+}
+
+.modal-backdrop.fade.no-animation {
+  opacity: 0.8!important;
+}

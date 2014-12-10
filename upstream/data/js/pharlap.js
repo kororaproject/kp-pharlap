@@ -59,6 +59,7 @@ function PharlapCtrl($scope, $modal) {
       controller: PharlapModuleSettingsModalCtrl,
       size: 'lg',
       templateUrl: 'moduleSettingsModal.html',
+      windowClass: 'no-animation',
       resolve: {
         data: function() {
           return {
