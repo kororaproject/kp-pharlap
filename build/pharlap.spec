@@ -9,7 +9,7 @@ URL:            https://github.com/kororaproject/kp-pharlap
 Source0:        %{name}-%{version}.tar.gz
 Requires:       python3
 BuildArch:      noarch
-Requires:       yumdaemon python3-yumdaemon pharlap-modaliases lens python3-hwdata
+Requires:       yumdaemon python3-yumdaemon pharlap-modaliases python3-lens python3-hwdata
 BuildRequires:  python3-devel desktop-file-utils
 
 %description
@@ -51,6 +51,8 @@ install -m 0644 README $RPM_BUILD_ROOT%{_datadir}/%{name}/README
 
 install -m 0644 pharlap.desktop %{buildroot}%{_datadir}/applications/pharlap.desktop
 
+cp -r data/* %{buildroot}%{_datadir}/%{name}
+
 # validate desktop files
 desktop-file-validate %{buildroot}%{_datadir}/applications/pharlap.desktop
 #desktop-file-validate %{buildroot}%{_sysconfdir}/xdg/autostart/pharlap.desktop
@@ -69,7 +71,7 @@ rm -rf $RPM_BUILD_ROOT
 
 %changelog
 * Wed Dec 10 2014 Chris Smart <csmart@kororaproject.org> - 1.2-1
-- New code based, requires python3
+- New code based, requires python3 and lens
 
 * Sat Nov 23 2013 Chris Smart <csmart@kororaproject.org> - 1.1-2
 - Add desktop file, dependency on pharlap-modaliases
