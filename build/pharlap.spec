@@ -1,16 +1,16 @@
 Name:           pharlap
-Version:        1.1
-Release:        2%{?dist}
+Version:        1.2
+Release:        1%{?dist}
 Summary:        System handling for proprietary drivers
 
 Group:          System Environment/Base
 License:        GPLv2
 URL:            https://github.com/kororaproject/kp-pharlap
 Source0:        %{name}-%{version}.tar.gz
-Requires:       python
+Requires:       python3
 BuildArch:      noarch
-Requires:       yumdaemon python-yumdaemon pharlap-modaliases
-BuildRequires:  python2-devel desktop-file-utils
+Requires:       yumdaemon python3-yumdaemon pharlap-modaliases lens python3-hwdata
+BuildRequires:  python3-devel desktop-file-utils
 
 %description
 Common driver handler for additional devices.
@@ -27,9 +27,9 @@ mkdir -p $RPM_BUILD_ROOT%{_datadir}/%{name}/quirks
 
 mkdir -p $RPM_BUILD_ROOT%{_datadir}/applications
 
-mkdir -p $RPM_BUILD_ROOT%{python_sitelib}/Pharlap
-mkdir -p $RPM_BUILD_ROOT%{python_sitelib}/Quirks
-mkdir -p $RPM_BUILD_ROOT%{python_sitelib}/NvidiaDetector
+mkdir -p $RPM_BUILD_ROOT%{python3_sitelib}/Pharlap
+mkdir -p $RPM_BUILD_ROOT%{python3_sitelib}/Quirks
+mkdir -p $RPM_BUILD_ROOT%{python3_sitelib}/NvidiaDetector
 
 install -m 0755 pharlap $RPM_BUILD_ROOT%{_bindir}/
 install -m 0755 pharlap-cli $RPM_BUILD_ROOT%{_bindir}/
@@ -42,9 +42,9 @@ install -m 0644 quirks/* $RPM_BUILD_ROOT%{_datadir}/%{name}/quirks/
 install -m 0755 share/fake-devices-wrapper $RPM_BUILD_ROOT%{_datadir}/%{name}/fake-devices-wrapper
 install -m 0644 share/obsolete $RPM_BUILD_ROOT%{_datadir}/%{name}/obsolete
 
-install -m 0644 Pharlap/* $RPM_BUILD_ROOT%{python_sitelib}/Pharlap/
-install -m 0644 Quirks/* $RPM_BUILD_ROOT%{python_sitelib}/Quirks/
-install -m 0644 NvidiaDetector/* $RPM_BUILD_ROOT%{python_sitelib}/NvidiaDetector/
+install -m 0644 Pharlap/* $RPM_BUILD_ROOT%{python3_sitelib}/Pharlap/
+install -m 0644 Quirks/* $RPM_BUILD_ROOT%{python3_sitelib}/Quirks/
+install -m 0644 NvidiaDetector/* $RPM_BUILD_ROOT%{python3_sitelib}/NvidiaDetector/
 
 install -m 0644 COPYING $RPM_BUILD_ROOT%{_datadir}/%{name}/COPYING
 install -m 0644 README $RPM_BUILD_ROOT%{_datadir}/%{name}/README
@@ -63,11 +63,14 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/pharlap
 %{_bindir}/pharlap-cli
 %{_datadir}/applications/pharlap.desktop
-%{python_sitelib}/Pharlap/
-%{python_sitelib}/Quirks/
-%{python_sitelib}/NvidiaDetector/
+%{python3_sitelib}/Pharlap/
+%{python3_sitelib}/Quirks/
+%{python3_sitelib}/NvidiaDetector/
 
 %changelog
+* Wed Dec 10 2014 Chris Smart <csmart@kororaproject.org> - 1.2-1
+- New code based, requires python3
+
 * Sat Nov 23 2013 Chris Smart <csmart@kororaproject.org> - 1.1-2
 - Add desktop file, dependency on pharlap-modaliases
 
