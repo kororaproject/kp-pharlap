@@ -19,6 +19,7 @@
 import dnf
 import hawkey
 import logging
+import math
 import os
 
 from lens.thread import Thread
@@ -127,9 +128,47 @@ def init_cb():
   app.threads.on(t, 'complete', _detect_thread_complete_cb)
   app.threads.add(t)
 
+@app.connect('apply-changes')
+def apply_changes_cb(request_install, request_remove):
+  drivers_install = request_install
+  drivers_remove = request_remove
+
+  # we don't want to ever remove kernel-modules
+  drivers_remove = [k for k in request_remove if k != 'kernel-modules']
+
+  # we always add .i686 for nvidia proprietary drivers (ie. steam)
+  for k in drivers_install:
+    if 'kmod-nvidia' in k:
+      drivers_install.append('xorg-x11-drv-%s-libs.i686' % (k[5:])) # strip kmod-
+    elif 'akmod-nvidia' in k:
+      drivers_install.append('xorg-x11-drv-%s-libs.i686' % (k[6:])) # strip akmod-
+
+  if len(drivers_install):
+    print('Installing: %s' % (', '.join(drivers_install)))
+    app.dbus_async_call('update-packages', dnfdaemon.Install, ''.join(drivers_install))
+
+  if len(drivers_remove):
+    print('Removing: %s' % (', '.join(drivers_remove)))
+    app.dbus_async_call('update-packages', dnfdaemon.Remove, ''.join(drivers_remove))
+
+  app.dbus_async_call('update-packages', dnfdaemon.RunTransaction, 100)
+
+
 @app.connect('close')
 def close_cb():
   app.close()
+
+@app.connect('app.close')
+def _close_app_cb(*args):
+  try:
+    dnfdaemon.Unlock()
+  except:
+    pass
+
+@app.connect('dbus.update-packges')
+def _dnf_update_packages_cb(err, ret):
+  print(ret)
+
 
 def _detect_thread_progress_cb(thread, *args):
   app.emit('update-progress', *args)
@@ -138,4 +177,67 @@ def _detect_thread_complete_cb(thread, modaliases, loaded_modules, devices, modu
   app.emit('init-config', os.uname()[2], modaliases, loaded_modules, devices, modules)
   app.emit('init-complete')
 
+
+def _sig_error_cb(error, sender=None):
+  print(error)
+  app.emit('dnf-error', error)
+
+def _sig_transaction_cb(event, data, sender=None):
+  print(event)
+  app.emit('dnf-transaction-state', event);
+
+def _sig_download_start_cb(num_files, num_bytes, sender=None):
+  app.emit('dnf-download-start', num_files, num_bytes)
+  print('DOWNLOADING: %d' % (num_files))
+
+# we filter the following noisy signal to total percentage changes
+download_progress_total = -1
+def _sig_download_progress_cb(name, frac, total_frac, total_files, sender=None):
+  progress_total = math.floor(total_frac * 100)
+
+  global download_progress_total
+  if download_progress_total != progress_total:
+    download_progress_total = progress_total
+    print('DOWNLOAD: %d, %f' % (total_files, total_frac))
+    app.emit('dnf-download-progress', name, frac, total_frac, total_files)
+
+# we filter the following noisy signal to total percentage changes
+rpm_progress_total = -1
+def _sig_rpm_progress_cb(package, action, te_current, te_total, ts_current, ts_total, sender=None):
+  global rpm_progress_total
+
+  if action == 'install' or action == 'erase':
+    progress_total = math.floor(100 * (ts_current+(te_current/te_total)) / ts_total)
+
+    if rpm_progress_total != progress_total:
+      rpm_progress_total = progress_total
+      app.emit('dnf-rpm-progress', package, action, te_current, te_total, ts_current, ts_total);
+      print('RPM: %s %s (%d, %d)' % (action, package, ts_current, ts_total))
+
+  elif action == 'verify':
+    progress_total = math.floor(100 * ts_current / ts_total)
+
+    if rpm_progress_total != progress_total:
+      rpm_progress_total = progress_total
+      app.emit('dnf-rpm-progress', package, action, te_current, te_total, ts_current, ts_total);
+      print('RPM: %s %s (%d, %d)' % (action, package, ts_current, ts_total))
+
+  else:
+    print('RPM: %s %s (%d, %d)' % (action, package, ts_current, ts_total))
+
+# build our dnfdaemon interface
+dnfdaemon = app.dbus_system_interface('org.baseurl.DnfSystem', '/')
+
+# connect the dnfdaemon signals
+dnfdaemon.connect_to_signal('TransactionEvent', _sig_transaction_cb, sender_keyword='sender')
+dnfdaemon.connect_to_signal('RPMProgress', _sig_rpm_progress_cb, sender_keyword='sender')
+dnfdaemon.connect_to_signal('DownloadStart', _sig_download_start_cb, sender_keyword='sender')
+dnfdaemon.connect_to_signal('DownloadProgress', _sig_download_progress_cb, sender_keyword='sender')
+dnfdaemon.connect_to_signal('ErrorMessage', _sig_error_cb, sender_keyword='sender')
+
+dnfdaemon.Lock()
+
+# dnf signal connection
+
+app.dbus_async_call('get-version', dnfdaemon.GetVersion)
 app.start()

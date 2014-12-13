@@ -1,6 +1,10 @@
 var app = angular.module("pharlap", ['lens.bridge', 'lens.ui']);
 
 function PharlapCtrl($scope, $modal) {
+  $scope.state = {
+    applying: false
+  };
+
   $scope.curtain = {
     progress: 0,
     message: 'Reading repository information ...'
@@ -90,6 +94,61 @@ function PharlapCtrl($scope, $modal) {
     $scope.openModuleSettingsModal(name, settings);
   };
 
+  $scope.applyChanges = function() {
+    /* return early if we're already applying */
+    if ($scope.state.applying) { return; }
+
+    var drivers_install = [];
+    var drivers_uninstall = [];
+
+    // process user changes
+    for(var path in $scope.data.devices) {
+      for(var driver in $scope.data.devices[path].drivers) {
+        var n = $scope.data.devices[path].drivers[driver];
+        var o = $scope.data._devices[path].drivers[driver];
+
+        if (n.selected !== o.selected) {
+          if (n.selected) {
+            drivers_install.push(driver);
+          }
+          else if (o.selected) {
+            drivers_uninstall.push(driver)
+          }
+        }
+      }
+    }
+
+    var modalInstance = $modal.open({
+      backdrop: 'static',
+      controller: PharlapProgressModalCtrl,
+      size: 'lg',
+      templateUrl: 'dnfProgressModal.html',
+      windowClass: 'no-animation',
+      resolve: {
+        data: function() {
+          return { message: 'Preparing ...', progress: 0 };
+        }
+      }
+    });
+
+    modalInstance.result.then(function(data) {
+      $scope.data._devices = angular.copy($scope.data.devices);
+      $scope.state.applying = false;
+    });
+
+    $scope.state.applying = true;
+
+    $scope.emit('apply-changes', drivers_install, drivers_uninstall);
+  };
+
+  $scope.canApplyChanges = function() {
+    return $scope.hasChanges && !$scope.state.applying;
+  };
+
+  $scope.canEditModuleSettings = function() {
+    return false;
+  };
+
   $scope.countDeviceByClass = function(filter) {
     var result = 0;
 
@@ -140,36 +199,22 @@ function PharlapCtrl($scope, $modal) {
     return result;
   };
 
-  $scope.selectDriver = function(device, driver) {
-    for(var d in device.drivers) {
-      if( d === driver) {
-        device.drivers[d].selected = true;
-      }
-      else {
-        delete device.drivers[d].selected;
-      }
-    }
-  };
-
-  $scope.isSelected = function(driver) {
-    return driver.hasOwnProperty('selected') && driver.selected;
-  };
-
-  $scope.isRecommended = function(driver) {
-    return driver.hasOwnProperty('free') && driver.free &&
-           driver.hasOwnProperty('from_distro') && driver.from_distro;
+  $scope.driverHasModules = function(dv) {
+    return dv.hasOwnProperty('modules') && Object.keys(dv.modules).length > 0;
   };
 
   $scope.getIconName = function(e) {
     return 'logo-' + e.toLowerCase().replace(/ /, '-') + '.png';
   };
 
-  $scope.driverHasModules = function(dv) {
-    return dv.hasOwnProperty('modules') && Object.keys(dv.modules).length > 0;
+  $scope.getQuirks = function(name) {
+    modules = $scope.data.modules;
+    return modules.hasOwnProperty(name) ? modules[name].options : '';
   };
 
-  $scope.isLoaded = function(pv, m) {
-    return pv.hasOwnProperty('loaded') && pv.loaded.indexOf(m) !== -1;
+  $scope.hasQuirks = function(name) {
+    modules = $scope.data.modules;
+    return modules.hasOwnProperty(name) && modules[name].options.length > 0;
   };
 
   $scope.isBlacklisted = function(name) {
@@ -177,14 +222,17 @@ function PharlapCtrl($scope, $modal) {
     return modules.hasOwnProperty(name) && modules[name].blacklisted;
   };
 
-  $scope.getQuirks = function(module) {
-    modules = $scope.data.modules;
-    return modules.hasOwnProperty(name) ? modules[name].options : '';
+  $scope.isLoaded = function(pv, m) {
+    return pv.hasOwnProperty('loaded') && pv.loaded.indexOf(m) !== -1;
   };
 
-  $scope.hasQuirks = function(module) {
-    modules = $scope.data.modules;
-    return modules.hasOwnProperty(name) && modules[name].options.length > 0;
+  $scope.isRecommended = function(driver) {
+    return driver.hasOwnProperty('free') && driver.free &&
+           driver.hasOwnProperty('from_distro') && driver.from_distro;
+  };
+
+  $scope.isSelected = function(driver) {
+    return driver.hasOwnProperty('selected') && driver.selected;
   };
 
   $scope.processDevices = function() {
@@ -212,6 +260,16 @@ function PharlapCtrl($scope, $modal) {
     });
   };
 
+  $scope.selectDriver = function(device, driver) {
+    for(var d in device.drivers) {
+      if( d === driver) {
+        device.drivers[d].selected = true;
+      }
+      else {
+        delete device.drivers[d].selected;
+      }
+    }
+  };
   $scope.hasChanges = function() {
     _m = angular.equals($scope.data._modules, $scope.data.modules);
     _d = angular.equals($scope.data._devices, $scope.data.devices);
@@ -266,6 +324,94 @@ var PharlapModuleSettingsModalCtrl = function($scope, $modalInstance, data) {
   $scope.cancel = function() {
     $modalInstance.dismiss('cancel');
   };
+};
+
+var PharlapProgressModalCtrl = function($scope, $modalInstance, data) {
+  $scope.message = data.message;
+  $scope.progress = data.progress;
+  $scope.downloads_total = 0;
+  $scope.downloads_current = 0;
+  $scope.updates_current = 0;
+
+  $scope.ok = function() {
+    $modalInstance.close($scope.data);
+  };
+
+  // register for appLoaded state
+  $scope.$on('dnf-transaction-state', function(e, state, data) {
+    $scope.state = state;
+    switch (state) {
+      case 'start-run':
+        $scope.message = 'Calculating ...';
+        break;
+
+      case 'pgk-to-download':
+        console.log(angular.fromJson(data));
+        break;
+
+      case 'download':
+        $scope.message = 'Downloading packages ...';
+        $scope.progress = 10;
+        break;
+
+      case 'run-transaction':
+        $scope.message = 'Updating packages ...';
+        $scope.progress = 50;
+        break;
+
+      case 'verify':
+        $scope.progress = 90;
+        break;
+
+      case 'end-run':
+        $scope.message = 'Finished.';
+        $scope.progress = 100;
+        $modalInstance.close();
+        break;
+
+      default:
+    }
+  });
+
+  $scope.$on('dnf-download-start', function(e, num_files, num_bytes) {
+    $scope.downloads_total = num_files;
+  });
+
+  $scope.$on('dnf-download-progress', function(e, package, frac, total_frac, total_files) {
+    var _progress = 10 + Math.floor(40 * total_frac);
+
+    if ($scope.progress !== _progress) {
+      var _remaining = $scope.downloads_total - total_files;
+      var _package = package.split(',')[0];
+      $scope.progress = _progress;
+      $scope.message = 'Downloading ' + _package + ', ' + _remaining + ' file' + (_remaining == 1 ? '' : 's') + ' remaining ...';
+    }
+  });
+
+  $scope.$on('dnf-rpm-progress', function(e, package, action, te_current, te_total, ts_current, ts_total) {
+    var _package = package.split(',')[0];
+
+    switch (action) {
+      case 'install':
+        $scope.progress = 50 + Math.floor(40 * (ts_current + te_current / te_total) / ts_total);
+        $scope.message = 'Installing ' + _package + '.';
+        break;
+
+      case 'erase':
+        $scope.progress = 50 + Math.floor(40 * (ts_current + te_current / te_total) / ts_total);
+        $scope.message = 'Removing ' + _package + '.';
+        break;
+
+      case 'verify':
+        $scope.progress = 90 + Math.floor(10 * ts_current / ts_total);
+        $scope.message = 'Verifying ' + _package + '.';
+        break;
+    }
+  });
+
+  $scope.$on('dnf-download-start', function(e, error) {
+    console.log('ERROR', error);
+  });
 };
 
 /*

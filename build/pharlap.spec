@@ -1,5 +1,5 @@
 Name:           pharlap
-Version:        1.2
+Version:        1.3
 Release:        1%{?dist}
 Summary:        System handling for proprietary drivers
 
@@ -70,6 +70,9 @@ rm -rf $RPM_BUILD_ROOT
 %{python3_sitelib}/NvidiaDetector/
 
 %changelog
+* Sat Dec 13 2014 Ian Firns <firnsy@kororaproject.org> - 1.3-1
+- Updated to latest upstream with package update support
+
 * Wed Dec 10 2014 Chris Smart <csmart@kororaproject.org> - 1.2-1
 - New code based, requires python3 and lens
 

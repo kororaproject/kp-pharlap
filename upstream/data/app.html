@@ -70,7 +70,7 @@
                           <div class="device-modules" ng-hide="!driverHasModules(dv)">
                             <ul>
                               <li ng-repeat="module in dv.modules" class="">
-                                <button class="btn btn-xs btn-default pull-right" ng-click="openModuleSettings(module); $event.stopPropagation();"><i class="fa fa-fw fa-cog"></i></button>
+                                <button ng-show="canEditModuleSettings()" class="btn btn-xs btn-default pull-right" ng-click="openModuleSettings(module); $event.stopPropagation();"><i class="fa fa-fw fa-cog"></i></button>
                                 <p>Module: {{module}}<span ng-hide="!isBlacklisted(module)" class="label label-black" tooltip="Blacklisted"><i class="fa fa-fw fa-ban"></i></span><span ng-hide="!isLoaded(pv, module)" class="label label-default" tooltip="Loaded"><i class="fa fa-fw fa-check"></i></span><span ng-hide="!isRecommended(dv)" class="label label-success recommended" tooltip="Recommended"><i class="fa fa-fw fa-thumbs-o-up"></i></span></p>
                                 <p ng-hide="!hasQuirks(module)">Quirks: {{getQuirks(module)}}</p>
                               </li>
@@ -114,8 +114,8 @@
           </div>
         </div>
         <div class="col-sm-4 text-right">
-          <a id="close" href="cmd://close" class="btn btn-dark" ng-class="{disabled: hasChanges()}">Revert</a>
-          <a id="close" href="cmd://close" class="btn btn-dark" ng-class="{disabled: hasChanges()}">Apply Changes</a>
+          <a ng-click="revertChanges()" class="btn btn-dark" ng-class="{disabled: hasChanges()}">Revert</a>
+          <a ng-click="applyChanges()" class="btn btn-dark" ng-class="{disabled: hasChanges()}">Apply Changes</a>
         </div>
       </div>
     </div>
@@ -140,6 +140,16 @@
     <div class="modal-footer">
       <button class="btn btn-sm btn-default" ng-click="cancel()">Cancel</button>
       <button class="btn btn-sm btn-success" ng-click="ok()">OK</button>
+    </div>
+  </script>
+
+  <script type="text/ng-template" id="dnfProgressModal.html">
+    <div class="modal-header">
+      <h3 class="modal-title">Applying Changes</h3>
+    </div>
+    <div class="modal-body">
+      <progressbar class="progress-xs progress-striped active" value="progress"></progressbar>
+      <p class="status">{{message}}</p>
     </div>
   </script>
 
