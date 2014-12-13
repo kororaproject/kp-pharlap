@@ -143,15 +143,19 @@ def apply_changes_cb(request_install, request_remove):
     elif 'akmod-nvidia' in k:
       drivers_install.append('xorg-x11-drv-%s-libs.i686' % (k[6:])) # strip akmod-
 
-  if len(drivers_install):
-    print('Installing: %s' % (', '.join(drivers_install)))
-    app.dbus_async_call('update-packages', dnfdaemon.Install, ''.join(drivers_install))
+  try:
+    if len(drivers_install):
+      print('Installing: %s' % (', '.join(drivers_install)))
+      dnfdaemon.Install(''.join(drivers_install))
 
-  if len(drivers_remove):
-    print('Removing: %s' % (', '.join(drivers_remove)))
-    app.dbus_async_call('update-packages', dnfdaemon.Remove, ''.join(drivers_remove))
+    if len(drivers_remove):
+      print('Removing: %s' % (', '.join(drivers_remove)))
+      dnfdaemon.Remove,( ''.join(drivers_remove))
 
-  app.dbus_async_call('update-packages', dnfdaemon.RunTransaction, 100)
+    app.dbus_async_call('update-packages', dnfdaemon.RunTransaction, 100)
+
+  except:
+    app.emit('dnf-abort')
 
 
 @app.connect('close')

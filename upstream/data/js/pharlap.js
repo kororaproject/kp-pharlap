@@ -131,8 +131,11 @@ function PharlapCtrl($scope, $modal) {
       }
     });
 
-    modalInstance.result.then(function(data) {
-      $scope.data._devices = angular.copy($scope.data.devices);
+    modalInstance.result.then(function(result) {
+      if (result == 0) {
+        $scope.data._devices = angular.copy($scope.data.devices);
+      }
+
       $scope.state.applying = false;
     });
 
@@ -366,7 +369,7 @@ var PharlapProgressModalCtrl = function($scope, $modalInstance, data) {
       case 'end-run':
         $scope.message = 'Finished.';
         $scope.progress = 100;
-        $modalInstance.close();
+        $modalInstance.close(0);
         break;
 
       default:
@@ -394,23 +397,28 @@ var PharlapProgressModalCtrl = function($scope, $modalInstance, data) {
     switch (action) {
       case 'install':
         $scope.progress = 50 + Math.floor(40 * (ts_current + te_current / te_total) / ts_total);
-        $scope.message = 'Installing ' + _package + '.';
+        $scope.message = 'Installing ' + _package + ' ...';
         break;
 
       case 'erase':
         $scope.progress = 50 + Math.floor(40 * (ts_current + te_current / te_total) / ts_total);
-        $scope.message = 'Removing ' + _package + '.';
+        $scope.message = 'Removing ' + _package + ' ...';
         break;
 
       case 'verify':
         $scope.progress = 90 + Math.floor(10 * ts_current / ts_total);
-        $scope.message = 'Verifying ' + _package + '.';
+        $scope.message = 'Verifying ' + _package + ' ...';
         break;
     }
   });
 
   $scope.$on('dnf-download-start', function(e, error) {
     console.log('ERROR', error);
+  });
+
+  $scope.$on('dnf-abort', function(e, error) {
+    $scope.message = 'Aborting ...';
+    $modalInstance.close(1);
   });
 };
 
