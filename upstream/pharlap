@@ -21,6 +21,7 @@ import hawkey
 import logging
 import math
 import os
+import re
 
 from lens.thread import Thread
 from lens.app import App
@@ -42,6 +43,11 @@ class DetectThread(Thread):
     self._build_modaliases = do_modaliases
     self._build_devices = do_devices
 
+    self._md_progress_last = -1
+
+  def _md_progress_cb(self, name, percentage):
+    self.emit('md-progress', name, percentage)
+
   def _progress_cb(self, percentage, alias):
     self.emit('progress', int(percentage), alias)
 
@@ -49,7 +55,7 @@ class DetectThread(Thread):
     modules = {}
 
     if self._build_cache:
-      self._config.cache = DNFCache(dnf.Base())
+      self._config.cache = DNFCache(dnf.Base(), md_progress_cb=self._md_progress_cb)
 
     if self._build_modaliases:
       self._config.modaliases = detect.system_modaliases()
@@ -120,10 +126,44 @@ app.load_ui('app.html')
 db = dnf.Base()
 config = PharlapConfig()
 
+meminfo = open('/proc/meminfo', 'r').read()
+cpuinfo = os.popen('lscpu').read()
+system = {
+  'arch': '64-bit (x64_64)',
+  'distribution': {
+    'name': 'Korora',
+    'codename': 'Peach',
+    'desktop':  'GNOME',
+    'version':  '20',
+    'live':     True,
+  },
+  'memory': {
+    'total':      int(re.search('MemTotal:\s+(\d+) kB', meminfo).group(1)) * 1000,
+    'free':       int(re.search('MemFree:\s+(\d+) kB', meminfo).group(1)) * 1000,
+    'available':  int(re.search('MemAvailable:\s+(\d+) kB', meminfo).group(1)) * 1000,
+    'buffers':    int(re.search('Buffers:\s+(\d+) kB', meminfo).group(1)) * 1000,
+    'cached':     int(re.search('Cached:\s+(\d+) kB', meminfo).group(1)) * 1000,
+    'swapCached': int(re.search('SwapCached:\s+(\d+) kB', meminfo).group(1)) * 1000,
+    'swapTotal':  int(re.search('SwapTotal:\s+(\d+) kB', meminfo).group(1)) * 1000,
+    'swapFree':   int(re.search('SwapFree:\s+(\d+) kB', meminfo).group(1)) * 1000,
+  },
+  'cpu': {
+    'model':    re.search('Model name:\s+(.*)', cpuinfo).group(1),
+    'sockets':  re.search('Socket\(s\):\s+(.*)', cpuinfo).group(1),
+    'clock':    re.search('CPU MHz:\s+(.*)', cpuinfo).group(1),
+    'clockMax': re.search('CPU max MHz:\s+(.*)', cpuinfo).group(1),
+    'clockMin': re.search('CPU min MHz:\s+(.*)', cpuinfo).group(1),
+    'cores_per_sockets': re.search('Core\(s\) per socket:\s+(.*)', cpuinfo).group(1),
+    'threads_per_core':  re.search('Model name:\s+(.*)', cpuinfo).group(1)
+  },
+  'current_kernel': os.uname()[2]
+}
+
 @app.connect('init')
 def init_cb():
   t = DetectThread(config, do_cache=True, do_modules=True, do_modaliases=True, do_devices=True)
 
+  app.threads.on(t, 'md-progress', _detect_thread_md_progress_cb)
   app.threads.on(t, 'progress', _detect_thread_progress_cb)
   app.threads.on(t, 'complete', _detect_thread_complete_cb)
   app.threads.add(t)
@@ -157,7 +197,6 @@ def apply_changes_cb(request_install, request_remove):
   except:
     app.emit('dnf-abort')
 
-
 @app.connect('close')
 def close_cb():
   app.close()
@@ -174,11 +213,22 @@ def _dnf_update_packages_cb(err, ret):
   print(ret)
 
 
+# we filter the following noisy signal to total percentage changes
+md_progress_last = -1
+def _detect_thread_md_progress_cb(thread, name, frac):
+  _progress = int(100 * frac)
+
+  global md_progress_last
+  if _progress != md_progress_last:
+    md_progress_last = _progress
+    app.emit('update-md-progress', name, _progress)
+
 def _detect_thread_progress_cb(thread, *args):
   app.emit('update-progress', *args)
 
 def _detect_thread_complete_cb(thread, modaliases, loaded_modules, devices, modules):
-  app.emit('init-config', os.uname()[2], modaliases, loaded_modules, devices, modules)
+  global system
+  app.emit('init-config', system, modaliases, loaded_modules, devices, modules)
   app.emit('init-complete')
 
 
@@ -241,7 +291,4 @@ dnfdaemon.connect_to_signal('ErrorMessage', _sig_error_cb, sender_keyword='sende
 
 dnfdaemon.Lock()
 
-# dnf signal connection
-
-app.dbus_async_call('get-version', dnfdaemon.GetVersion)
 app.start()

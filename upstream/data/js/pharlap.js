@@ -25,36 +25,7 @@ function PharlapCtrl($scope, $modal) {
     blacklist_other: true
   };
 
-  $scope.system = {
-    arch:       '64-bit (x64_64)',
-    distribution: {
-      name:     'Korora',
-      codename: 'Peach',
-      desktop:  'GNOME',
-      version:  '20',
-      live:     true,
-    },
-    memory: {
-      total:      8080964,
-      free:       256456,
-      available:  2477224,
-      buffers:    264148,
-      cached:     2207288,
-      swapCached: 24248,
-      swapTotal:  8142844,
-      swapFree:   7535684
-    },
-    cpu: {
-      model: 'Intel(R) Core(TM) i7-3520M CPU @ 2.90GHz',
-      sockets: 1,
-      cores_per_sockets: 2,
-      threads_per_core: 2,
-      clock:    3577.648,
-      clockMax: 3600.0000,
-      clockMin: 1200.0000
-    },
-    current_kernel: ''
-  };
+  $scope.system = {};
 
   $scope.openModuleSettingsModal = function(name, settings) {
 
@@ -289,9 +260,16 @@ function PharlapCtrl($scope, $modal) {
   /* SIGNALS */
 
   // register to configuration updates
+  $scope.$on('update-md-progress', function(e, name, progress) {
+    $scope.curtain.progress = progress;
+    $scope.curtain.message = 'Reading repo information ...'
+    $scope.curtain.submessage = name;
+  });
+
   $scope.$on('update-progress', function(e, progress, message) {
     $scope.curtain.progress = progress;
-    $scope.curtain.message = "Searching for packages that match your hardware ...";
+    $scope.curtain.message = 'Searching for packages that match your hardware ...';
+    $scope.curtain.submessage = '';
   });
 
   // register for appLoaded state
@@ -301,8 +279,8 @@ function PharlapCtrl($scope, $modal) {
   });
 
 
-  $scope.$on('init-config', function(e, k, ma, lm, d, m) {
-    $scope.system.current_kernel = k;
+  $scope.$on('init-config', function(e, system, ma, lm, d, m) {
+    $scope.system = system;
     $scope.data.loaded_modules = lm;
     $scope.data.devices = d;
     $scope.data.modules = m;

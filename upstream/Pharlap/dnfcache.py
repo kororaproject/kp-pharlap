@@ -1,14 +1,47 @@
 import dnf
+import dnf.callback
 import fnmatch
 import hawkey
 import json
 
+class DNFCacheMDProgress(dnf.callback.DownloadProgress):
+  """Metadata Download callback handler."""
+  def __init__(self, cb=None):
+    super(DNFCacheMDProgress, self).__init__()
+    self._last = -1.0
+    self._cb = cb
+
+  def start(self, total_files, total_size):
+    self._last = -1.0
+
+  def end(self, payload, status, msg):
+    name = str(payload)
+    if status == dnf.callback.STATUS_OK:
+      if self._cb is not None:
+        self._cb(name, 1.0)
+
+  def progress(self, payload, done):
+    name = str(payload)
+    cur_total_bytes = payload.download_size
+    if cur_total_bytes:
+      frac = done / float(cur_total_bytes)
+    else:
+      frac = 0.0
+
+    if frac > self._last + 0.01:
+      self._last = frac
+
+    if self._cb is not None:
+      self._cb(name, frac)
+
+
 class DNFCache(object):
-  def __init__(self, db=dnf.Base()):
+  def __init__(self, db=dnf.Base(), md_progress_cb=None):
     if not isinstance(db, dnf.Base):
       raise Exception('Expected dnf.Base object.')
 
     self._db = db
+    self._md_progress = DNFCacheMDProgress(cb=md_progress_cb)
 
     # we're a cache after all
     self._db.conf.releasever = dnf.rpm.detect_releasever( db.conf.installroot )
@@ -19,6 +52,9 @@ class DNFCache(object):
     self._system_cachedir = cli_cache.system_cachedir
 
     self._db.read_all_repos()
+
+    # attach repo metadata progress
+    self._db.repos.all().set_progress_bar(self._md_progress)
 
     # fill the sack with goodies
     self._db.fill_sack()
