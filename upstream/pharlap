@@ -126,16 +126,18 @@ app.load_ui('app.html')
 db = dnf.Base()
 config = PharlapConfig()
 
+distinfo = os.popen('lsb_release -a').read()
 meminfo = open('/proc/meminfo', 'r').read()
 cpuinfo = os.popen('lscpu').read()
+
 system = {
   'arch': '64-bit (x64_64)',
   'distribution': {
-    'name': 'Korora',
-    'codename': 'Peach',
+    'name':     re.search('Distributor ID:\s+(.*)', distinfo).group(1),
+    'codename': re.search('Codename:\s+(.*)', distinfo).group(1),
     'desktop':  'GNOME',
-    'version':  '20',
-    'live':     True,
+    'version':  re.search('Release:\s+(.*)', distinfo).group(1),
+    'live':     False,
   },
   'memory': {
     'total':      int(re.search('MemTotal:\s+(\d+) kB', meminfo).group(1)) * 1024,

@@ -1,6 +1,15 @@
 var app = angular.module("pharlap", ['lens.bridge', 'lens.ui']);
 
+var Util = Util || {};
+Util.helpers = {
+  formatHuman: function(v,a,b,c,d) {
+    return (a=a?[1e3,'k','B']:[1024,'K','iB'],b=Math,c=b.log,d=c(v)/c(a[0])|0,v/b.pow(a[0],d)).toFixed(2) +' '+(d?(a[1]+'MGTPEZY')[--d]+a[2]:'Bytes');
+  },
+}
+
 function PharlapCtrl($scope, $modal) {
+  $scope.util = Util.helpers;
+
   $scope.state = {
     applying: false
   };

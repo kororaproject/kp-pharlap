@@ -43,7 +43,7 @@
                   <h3>System</h3>
                   <p>Architecture: {{system.arch}}</p>
                   <p>CPU: {{system.cpu.model}}</p>
-                  <p>RAM: {{system.memory.total}} ({{system.memory.free}} available)</p>
+                  <p>RAM: {{util.formatHuman(system.memory.total)}} ({{util.formatHuman(system.memory.free)}} available)</p>
                   <p>Kernel: {{system.current_kernel}}</p>
                 </div>
 
