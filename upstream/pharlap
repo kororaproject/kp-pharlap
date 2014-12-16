@@ -23,8 +23,9 @@ import math
 import os
 import re
 
-from lens.thread import Thread
 from lens.app import App
+from lens.system import System
+from lens.thread import Thread
 
 from Pharlap import detect
 from Pharlap.modprobe import ModProbe
@@ -126,40 +127,7 @@ app.load_ui('app.html')
 db = dnf.Base()
 config = PharlapConfig()
 
-distinfo = os.popen('lsb_release -a').read()
-meminfo = open('/proc/meminfo', 'r').read()
-cpuinfo = os.popen('lscpu').read()
-
-system = {
-  'arch': '64-bit (x64_64)',
-  'distribution': {
-    'name':     re.search('Distributor ID:\s+(.*)', distinfo).group(1),
-    'codename': re.search('Codename:\s+(.*)', distinfo).group(1),
-    'desktop':  'GNOME',
-    'version':  re.search('Release:\s+(.*)', distinfo).group(1),
-    'live':     False,
-  },
-  'memory': {
-    'total':      int(re.search('MemTotal:\s+(\d+) kB', meminfo).group(1)) * 1024,
-    'free':       int(re.search('MemFree:\s+(\d+) kB', meminfo).group(1)) * 1024,
-    'available':  int(re.search('MemAvailable:\s+(\d+) kB', meminfo).group(1)) * 1024,
-    'buffers':    int(re.search('Buffers:\s+(\d+) kB', meminfo).group(1)) * 1024,
-    'cached':     int(re.search('Cached:\s+(\d+) kB', meminfo).group(1)) * 1024,
-    'swapCached': int(re.search('SwapCached:\s+(\d+) kB', meminfo).group(1)) * 1024,
-    'swapTotal':  int(re.search('SwapTotal:\s+(\d+) kB', meminfo).group(1)) * 1024,
-    'swapFree':   int(re.search('SwapFree:\s+(\d+) kB', meminfo).group(1)) * 1024,
-  },
-  'cpu': {
-    'model':    re.search('Model name:\s+(.*)', cpuinfo).group(1),
-    'sockets':  re.search('Socket\(s\):\s+(.*)', cpuinfo).group(1),
-    'clock':    re.search('CPU MHz:\s+(.*)', cpuinfo).group(1),
-    'clockMax': re.search('CPU max MHz:\s+(.*)', cpuinfo).group(1),
-    'clockMin': re.search('CPU min MHz:\s+(.*)', cpuinfo).group(1),
-    'cores_per_sockets': re.search('Core\(s\) per socket:\s+(.*)', cpuinfo).group(1),
-    'threads_per_core':  re.search('Model name:\s+(.*)', cpuinfo).group(1)
-  },
-  'current_kernel': os.uname()[2]
-}
+system = System().to_dict()
 
 @app.connect('init')
 def init_cb():

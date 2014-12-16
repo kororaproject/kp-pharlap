@@ -1,5 +1,5 @@
 Name:           pharlap
-Version:        1.3
+Version:        1.3.1
 Release:        2%{?dist}
 Summary:        System handling for proprietary drivers
 
@@ -70,6 +70,9 @@ rm -rf $RPM_BUILD_ROOT
 %{python3_sitelib}/NvidiaDetector/
 
 %changelog
+* Sat Dec 13 2014 Ian Firns <firnsy@kororaproject.org> - 1.3.1-1
+- Updated to latest upstream using lens system information
+
 * Sun Dec 14 2014 Chris Smart <csmart@kororaproject.org> - 1.3-2
 - Convert yum deps to dnf deps
 
