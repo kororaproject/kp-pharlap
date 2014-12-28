@@ -1,6 +1,6 @@
 Name:           pharlap
 Version:        1.3.1
-Release:        1%{?dist}
+Release:        1%{?dist}.1
 Summary:        System handling for proprietary drivers
 
 Group:          System Environment/Base
@@ -9,7 +9,8 @@ URL:            https://github.com/kororaproject/kp-pharlap
 Source0:        %{name}-%{version}.tar.gz
 Requires:       python3
 BuildArch:      noarch
-Requires:       dnfdaemon python3-dnfdaemon pharlap-modaliases python3-lens python3-hwdata
+Requires:       dnfdaemon python3-dnfdaemon pharlap-modaliases python3-hwdata
+Requires:     	python3-lens >= 0.7.2
 BuildRequires:  python3-devel desktop-file-utils
 
 %description
