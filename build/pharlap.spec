@@ -1,6 +1,6 @@
 Name:           pharlap
 Version:        1.3.1
-Release:        1%{?dist}.1
+Release:        2%{?dist}
 Summary:        System handling for proprietary drivers
 
 Group:          System Environment/Base
@@ -9,8 +9,8 @@ URL:            https://github.com/kororaproject/kp-pharlap
 Source0:        %{name}-%{version}.tar.gz
 Requires:       python3
 BuildArch:      noarch
-Requires:       dnfdaemon python3-dnfdaemon pharlap-modaliases python3-hwdata
-Requires:     	python3-lens >= 0.7.2
+Requires:       dnfdaemon python3-dnfdaemon python3-hwdata
+Requires:       python3-lens >= 0.7.5
 BuildRequires:  python3-devel desktop-file-utils
 
 %description
@@ -71,6 +71,10 @@ rm -rf $RPM_BUILD_ROOT
 %{python3_sitelib}/NvidiaDetector/
 
 %changelog
+* Tue Dec 30 2014 Ian Firns <firnsy@kororaproject.org> - 1.3.2-1
+- Updated pharlap-cli for new modules.
+- No -modalias dependency
+
 * Mon Dec 15 2014 Ian Firns <firnsy@kororaproject.org> - 1.3.1-1
 - Updated to latest upstream using lens system information
 

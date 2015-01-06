@@ -20,7 +20,7 @@ import subprocess
 import sys
 
 import Pharlap.detect
-from Pharlap.DNFCache import DNFCache
+from Pharlap.dnfcache import DNFCache
 
 def parse_args():
     '''Parse command line arguments.'''
