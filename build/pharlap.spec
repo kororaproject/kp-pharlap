@@ -1,6 +1,6 @@
 Name:           pharlap
-Version:        1.3.1
-Release:        2%{?dist}.1
+Version:        1.3.2
+Release:        1%{?dist}
 Summary:        System handling for proprietary drivers
 
 Group:          System Environment/Base
@@ -9,18 +9,19 @@ URL:            https://github.com/kororaproject/kp-pharlap
 Source0:        %{name}-%{version}.tar.gz
 Requires:       python3
 BuildArch:      noarch
-Requires:       dnfdaemon python3-dnfdaemon python3-hwdata pharlap-modaliases
+Requires:       pharlap-modaliases
+Requires:       dnfdaemon python3-dnfdaemon python3-hwdata
 Requires:       python3-lens >= 0.7.5
 BuildRequires:  python3-devel desktop-file-utils
 
 %description
 Common driver handler for additional devices.
 
+
 %prep
 %setup -q
 
 %install
-
 mkdir -p $RPM_BUILD_ROOT%{_bindir}
 
 mkdir -p $RPM_BUILD_ROOT%{_datadir}/%{name}/detect
@@ -52,17 +53,30 @@ install -m 0644 README $RPM_BUILD_ROOT%{_datadir}/%{name}/README
 
 install -m 0644 pharlap.desktop %{buildroot}%{_datadir}/applications/pharlap.desktop
 
+install -m 0644 pharlap-modalias.map $RPM_BUILD_ROOT%{_datadir}/%{name}/pharlap-modalias.map
+
 cp -r data/* %{buildroot}%{_datadir}/%{name}
 
 # validate desktop files
 desktop-file-validate %{buildroot}%{_datadir}/applications/pharlap.desktop
-#desktop-file-validate %{buildroot}%{_sysconfdir}/xdg/autostart/pharlap.desktop
 
 %clean
 rm -rf $RPM_BUILD_ROOT
 
+
+%package -n pharlap-modaliases
+Summary:        Modalias to package map for the Pharlap
+Group:          System Environment/Base
+
+%description -n pharlap-modaliases
+Modalias to package map for the Pharlap.
+
+%files -n pharlap-modaliases
+%{_datadir}/%{name}/pharlap-modalias.map
+
+
 %files
-%{_datadir}/%{name}/
+%{_datadir}/%{name}/*
 %{_bindir}/pharlap
 %{_bindir}/pharlap-cli
 %{_datadir}/applications/pharlap.desktop
