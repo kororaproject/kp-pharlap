@@ -156,11 +156,11 @@ def apply_changes_cb(request_install, request_remove):
   try:
     if len(drivers_install):
       print('Installing: %s' % (', '.join(drivers_install)))
-      dnfdaemon.Install(''.join(drivers_install))
+      dnfdaemon.Install(' '.join(drivers_install))
 
     if len(drivers_remove):
       print('Removing: %s' % (', '.join(drivers_remove)))
-      dnfdaemon.Remove,( ''.join(drivers_remove))
+      dnfdaemon.Remove(' '.join(drivers_remove))
 
     app.dbus_async_call('update-packages', dnfdaemon.RunTransaction, 100)
 
