@@ -148,10 +148,10 @@ def apply_changes_cb(request_install, request_remove):
 
   # we always add .i686 for nvidia proprietary drivers (ie. steam)
   for k in drivers_install:
-    if 'kmod-nvidia' in k:
-      drivers_install.append('xorg-x11-drv-%s-libs.i686' % (k[5:])) # strip kmod-
-    elif 'akmod-nvidia' in k:
+    if 'akmod-nvidia' in k:
       drivers_install.append('xorg-x11-drv-%s-libs.i686' % (k[6:])) # strip akmod-
+    elif 'kmod-nvidia' in k:
+      drivers_install.append('xorg-x11-drv-%s-libs.i686' % (k[5:])) # strip kmod-
 
   try:
     if len(drivers_install):
