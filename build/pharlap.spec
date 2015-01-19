@@ -9,7 +9,7 @@ URL:            https://github.com/kororaproject/kp-pharlap
 Source0:        %{name}-%{version}.tar.gz
 Requires:       python3
 BuildArch:      noarch
-Requires:       pharlap-modaliases >= %{version}
+Requires:       pharlap-modaliases >= %{version}-%{release}
 Requires:       dnfdaemon python3-dnfdaemon python3-hwdata
 Requires:       python3-lens >= 0.7.5
 BuildRequires:  python3-devel desktop-file-utils
