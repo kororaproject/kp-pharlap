@@ -1,6 +1,6 @@
 Name:           pharlap
-Version:        1.3.2
-Release:        1%{?dist}.3
+Version:        1.3.3
+Release:        1%{?dist}
 Summary:        System handling for proprietary drivers
 
 Group:          System Environment/Base
@@ -23,6 +23,8 @@ Common driver handler for additional devices.
 
 %install
 mkdir -p $RPM_BUILD_ROOT%{_bindir}
+
+mkdir -p %{buildroot}%{_datadir}/icons/hicolor
 
 mkdir -p $RPM_BUILD_ROOT%{_datadir}/%{name}/detect
 mkdir -p $RPM_BUILD_ROOT%{_datadir}/%{name}/quirks
@@ -55,6 +57,8 @@ install -m 0644 pharlap.desktop %{buildroot}%{_datadir}/applications/pharlap.des
 
 install -m 0644 pharlap-modalias.map $RPM_BUILD_ROOT%{_datadir}/%{name}/pharlap-modalias.map
 
+cp -a icons/* %{buildroot}%{_datadir}/icons/hicolor/
+
 cp -r data/* %{buildroot}%{_datadir}/%{name}
 
 # validate desktop files
@@ -62,6 +66,18 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/pharlap.desktop
 
 %clean
 rm -rf $RPM_BUILD_ROOT
+
+%post
+/bin/touch --no-create %{_datadir}/icons/hicolor &>/dev/null || :
+
+%postun
+if [ $1 -eq 0 ] ; then
+    /bin/touch --no-create %{_datadir}/icons/hicolor &>/dev/null
+    /usr/bin/gtk-update-icon-cache %{_datadir}/icons/hicolor &>/dev/null || :
+fi
+
+%posttrans
+/usr/bin/gtk-update-icon-cache %{_datadir}/icons/hicolor &>/dev/null || :
 
 
 %package -n pharlap-modaliases
@@ -83,8 +99,12 @@ Modalias to package map for the Pharlap.
 %{python3_sitelib}/Pharlap/
 %{python3_sitelib}/Quirks/
 %{python3_sitelib}/NvidiaDetector/
+%{_datadir}/icons/hicolor/*/*/*
 
 %changelog
+* Tue Jan 20 2015 Chris Smart <csmart@kororaproject.org> - 1.3.3-1
+- Add generic hwinfo icon for themes that have none.
+
 * Tue Dec 30 2014 Ian Firns <firnsy@kororaproject.org> - 1.3.2-1
 - Updated pharlap-cli for new modules.
 - No -modalias dependency
