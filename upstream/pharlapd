@@ -16,13 +16,19 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
+# FIXME: Hack for gobject don't blow up'
+import os
+os.environ['XDG_RUNTIME_DIR'] = '/root'
+
+import argparse
 import dbus
 import dbus.service
 import dbus.mainloop.glib
+import dnfdaemon.server
 import logging
 
+from dnfdaemon.server import Logger
 from Pharlap.modprobe import ModProbe
-from Pharlap.daemon import Daemon
 
 DAEMON_ORG = 'org.kororaproject.Pharlap'
 DAEMON_INT = DAEMON_ORG
@@ -50,7 +56,7 @@ class PharlapDaemon(dnfdaemon.server.DnfDaemonBase):
 
 
   @Logger
-  @dbus.service.method(DAEMON_INTERFACE, in_signature='', out_signature='i')
+  @dbus.service.method(DAEMON_INT, in_signature='', out_signature='i')
   def GetVersion(self):
     """
     Get the daemon version
@@ -59,7 +65,7 @@ class PharlapDaemon(dnfdaemon.server.DnfDaemonBase):
 
 
   @Logger
-  @dbus.service.method(DAEMON_INTERFACE, in_signature='', out_signature='s')
+  @dbus.service.method(DAEMON_INT, in_signature='', out_signature='s')
   def GetHardware(self):
     """
     Get system hardware listing
@@ -121,6 +127,63 @@ class PharlapDaemon(dnfdaemon.server.DnfDaemonBase):
     value = self.remove(cmds)
     return self.working_ended(value)
 
+  @Logger
+  @dbus.service.method(DAEMON_INT, in_signature='ss', out_signature='s', sender_keyword='sender')
+  def AddTransaction(self, pkg_id, action, sender=None):
+    """
+    Add an package to the current transaction
+
+    :param pkg_id: package pkg_id for the package to add
+    :param action: the action to perform ( install, update, remove,
+                   obsolete, reinstall, downgrade, localinstall )
+    """
+    self.working_start(sender, write=False)
+    value = self.add_transaction(pkg_id, action)
+    return self.working_ended(value)
+
+  @Logger
+  @dbus.service.method(DAEMON_INT, in_signature='', out_signature='', sender_keyword='sender')
+  def ClearTransaction(self, sender):
+    """
+    Clear the transactopm
+    """
+    self.working_start(sender, write=False)
+    self.clear_transaction()
+    return self.working_ended()
+
+  @Logger
+  @dbus.service.method(DAEMON_INT, in_signature='', out_signature='s', sender_keyword='sender')
+  def GetTransaction(self, sender=None):
+    """
+    Return the members of the current transaction
+    """
+    self.working_start(sender, write=False)
+    value = self.get_transaction()
+    return self.working_ended(value)
+
+  @Logger
+  @dbus.service.method(DAEMON_INT, in_signature='', out_signature='s', sender_keyword='sender')
+  def BuildTransaction(self, sender):
+    """
+    Resolve dependencies of current transaction
+    """
+    self.working_start(sender, write=False)
+    value = self.build_transaction()
+    return self.working_ended(value)
+
+  @Logger
+  @dbus.service.method(DAEMON_INT, in_signature='i', out_signature='s', sender_keyword='sender')
+  def RunTransaction(self, max_err, sender=None):
+    """
+    Run the current yum transaction
+    :param max_err: maximum download errors before bail out
+    """
+    self.working_start(sender)
+    self.check_permission_write(sender)
+    self.check_lock(sender)
+    result = self.run_transaction(max_err)
+    return self.working_ended(result)
+
 
 #
 # HELPERS
@@ -178,11 +241,14 @@ class PharlapDaemon(dnfdaemon.server.DnfDaemonBase):
 
     obj = dbus.SystemBus().get_object(
       'org.freedesktop.PolicyKit1',
-      '/org/freedesktop/PolicyKit1/Authority')
+      '/org/freedesktop/PolicyKit1/Authority'
+    )
+
     obj = dbus.Interface(obj, 'org.freedesktop.PolicyKit1.Authority')
-      (granted, _, details) = obj.CheckAuthorization(
-        ('system-bus-name', {'name': sender}), action, {},
-        dbus.UInt32(1), '', timeout=600)
+
+    (granted, _, details) = obj.CheckAuthorization(
+      ('system-bus-name', {'name': sender}), action, {},
+      dbus.UInt32(1), '', timeout=600)
 
     if not granted:
       raise AccessDeniedError('Session is not authorized')
@@ -190,17 +256,16 @@ class PharlapDaemon(dnfdaemon.server.DnfDaemonBase):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Pharlap D-Bus Daemon')
-    parser.add_argument('-v', '--verbose', action='store_true')
-    parser.add_argument('-d', '--debug', action='store_true')
-    parser.add_argument('--notimeout', action='store_true')
-    args = parser.parse_args()
-    if args.verbose:
-        if args.debug:
-            dnfdaemon.server.doTextLoggerSetup(logroot='dnfdaemon',
-                loglvl=logging.DEBUG)
-        else:
-            dnfdaemon.server.doTextLoggerSetup(logroot='dnfdaemon')
+  parser = argparse.ArgumentParser(description='Pharlap D-Bus Daemon')
+  parser.add_argument('-v', '--verbose', action='store_true')
+  parser.add_argument('-d', '--debug', action='store_true')
+  parser.add_argument('--notimeout', action='store_true')
+  args = parser.parse_args()
+  if args.verbose:
+    if args.debug:
+      dnfdaemon.server.doTextLoggerSetup(logroot='pharlap', loglvl=logging.DEBUG)
+    else:
+      dnfdaemon.server.doTextLoggerSetup(logroot='pharlap')
 
   # setup the DBus mainloop
   dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
