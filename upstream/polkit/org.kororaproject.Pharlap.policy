@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+<policyconfig>
+  <vendor>Pharlap</vendor>
+  <vendor_url>http://www.kororaproject.org/</vendor_url>
+  <action id="org.kororaproject.Pharlap.write">
+    <description>pharlap</description>
+    <message>Application requesting Pharlap to modify system packages/configuration</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+  <action id="org.kororaproject.Pharlap.read">
+    <description>pharlap</description>
+    <message>Application requesting Pharlap to read system packages/configuration</message>
+    <defaults>
+      <allow_any>yes</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+</policyconfig>

@@ -360,7 +360,7 @@ def _get_db_name(syspath, alias):
     device_type = alias.split(':')[0]
     db = '/usr/share/hwdata/%s.ids' % device_type
     if not os.path.exists(db):
-        logging.debug('DB doesn\'t exists: %s' % (db))
+#        logging.debug('DB doesn\'t exists: %s' % (db))
         return (None, None)
 
     vendor = None

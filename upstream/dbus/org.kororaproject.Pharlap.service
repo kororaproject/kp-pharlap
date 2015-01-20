@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=org.kororaproject.Pharlap
+Exec=/usr/share/pharlap/pharlapd
+User=root

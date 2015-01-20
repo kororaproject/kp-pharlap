@@ -1,0 +1,213 @@
+#!/usr/bin/python3
+#
+# Copyright 2012-2014 "Korora Project" <dev@kororaproject.org>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the temms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+#
+
+import dbus
+import dbus.service
+import dbus.mainloop.glib
+import logging
+
+from Pharlap.modprobe import ModProbe
+from Pharlap.daemon import Daemon
+
+DAEMON_ORG = 'org.kororaproject.Pharlap'
+DAEMON_INT = DAEMON_ORG
+
+logger = logging.getLogger('pharlap.daemon')
+
+
+class AccessDeniedError(dbus.DBusException):
+  _dbus_error_name = DAEMON_ORG + '.AccessDeniedError'
+
+
+
+class NotImplementedError(dbus.DBusException):
+  _dbus_error_name = DAEMON_ORG + '.NotImplementedError'
+
+
+
+class PharlapDaemon(dnfdaemon.server.DnfDaemonBase):
+
+  def __init__(self):
+    dnfdaemon.server.DnfDaemonBase.__init__(self)
+    bus_name = dbus.service.BusName(DAEMON_ORG, bus=dbus.SystemBus())
+    dbus.service.Object.__init__(self, bus_name, '/')
+    self._gpg_confirm = {}
+
+
+  @Logger
+  @dbus.service.method(DAEMON_INTERFACE, in_signature='', out_signature='i')
+  def GetVersion(self):
+    """
+    Get the daemon version
+    """
+    return dnfdaemon.server.VERSION
+
+
+  @Logger
+  @dbus.service.method(DAEMON_INTERFACE, in_signature='', out_signature='s')
+  def GetHardware(self):
+    """
+    Get system hardware listing
+    """
+
+    hwinfo = '{}'
+
+    ret = os.popen('/usr/sbin/lshw -quiet -json').read()
+    if len(ret) > 0:   
+      hwinfo = json.dumps(json.loads(ret))
+
+    return hwinfo
+
+
+  @Logger
+  @dbus.service.method(DAEMON_INT, in_signature='sb', out_signature='b', sender_keyword='sender')
+  def BlacklistModule(self, name, state, sender=None):
+    """
+    Get the value a list of repo ids
+    :param name: name of module to blacklist
+    :param sender:
+    """
+    return True
+
+
+  @Logger
+  @dbus.service.method(DAEMON_INT, in_signature='ss', out_signature='b', sender_keyword='sender')
+  def SetModuleQuirks(self, name, quirks, sender=None):
+    """
+    Get the value a list of repo ids
+    :param filter: filter to limit the listed repositories
+    :param sender:
+    """
+    return True
+
+  @Logger
+  @dbus.service.method(DAEMON_INT, in_signature='s', out_signature='s', sender_keyword='sender')
+  def Install(self, cmds, sender=None):
+    """
+    Install packages based on command patterns separated by spaces
+    simulate what 'dnf install <arguments>' does
+    :param cmds: command patterns separated by spaces
+    :param sender:
+    """
+    self.working_start(sender)
+    value = self.install(cmds)
+    return self.working_ended(value)
+
+  @Logger
+  @dbus.service.method(DAEMON_INT, in_signature='s', out_signature='s', sender_keyword='sender')
+  def Remove(self, cmds, sender=None):
+    """
+    Remove packages based on command patterns separated by spaces
+    simulate what 'dnf remove <arguments>' does
+    :param cmds: command patterns separated by spaces
+    :param sender:
+    """
+    self.working_start(sender)
+    value = self.remove(cmds)
+    return self.working_ended(value)
+
+
+#
+# HELPERS
+#
+
+  def working_start(self, sender, write=True):
+    if write:
+      self.check_permission_write(sender)
+
+    else:
+      self.check_permission_read(sender)
+
+    self.check_lock(sender)
+    self._is_working = True
+    self._watchdog_count = 0
+
+  def working_ended(self, value=None):
+    self._is_working = False
+    return value
+
+  def check_lock(self, sender):
+    """
+    Check that the current sender is owning the pharlap lock
+    :param sender:
+    """
+    if self._lock == sender:
+      return True
+
+    else:
+      raise LockedError('pharlapd is locked by another application')
+
+  def check_permission_write(self, sender):
+    """ Check for senders permission to update system packages"""
+    if sender in self.authorized_sender_write:
+      return
+
+    else:
+      self._check_permission(sender, 'org.kororaproject.Pharlap.write')
+      self.authorized_sender_write.add(sender)
+
+  def check_permission_read(self, sender):
+    """ Check for senders permission to read system packages"""
+    if sender in self.authorized_sender_read:
+      return
+
+    else:
+      self._check_permission(sender, 'org.kororaproject.Pharlap.read')
+      self.authorized_sender_read.add(sender)
+
+  def _check_permission(self, sender, action):
+    """ Check senders permissions using PolicyKit1
+    """
+    if not sender:
+      raise ValueError('sender == None')
+
+    obj = dbus.SystemBus().get_object(
+      'org.freedesktop.PolicyKit1',
+      '/org/freedesktop/PolicyKit1/Authority')
+    obj = dbus.Interface(obj, 'org.freedesktop.PolicyKit1.Authority')
+      (granted, _, details) = obj.CheckAuthorization(
+        ('system-bus-name', {'name': sender}), action, {},
+        dbus.UInt32(1), '', timeout=600)
+
+    if not granted:
+      raise AccessDeniedError('Session is not authorized')
+
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Pharlap D-Bus Daemon')
+    parser.add_argument('-v', '--verbose', action='store_true')
+    parser.add_argument('-d', '--debug', action='store_true')
+    parser.add_argument('--notimeout', action='store_true')
+    args = parser.parse_args()
+    if args.verbose:
+        if args.debug:
+            dnfdaemon.server.doTextLoggerSetup(logroot='dnfdaemon',
+                loglvl=logging.DEBUG)
+        else:
+            dnfdaemon.server.doTextLoggerSetup(logroot='dnfdaemon')
+
+  # setup the DBus mainloop
+  dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+
+  pd = PharlapDaemon()
+  pd.mainloop_run()
+
+
+if __name__ == '__main__':
+  main()
