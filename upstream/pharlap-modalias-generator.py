@@ -169,5 +169,7 @@ f = open(json_path, 'w')
 f.write( json.dumps(modalias_map) )
 f.close()
 
+print('Generated map at %s' % json_path)
+
 #pp = pprint.PrettyPrinter(indent=2)
 #pp.pprint(modalias_map)

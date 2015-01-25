@@ -1,6 +1,6 @@
 Name:           pharlap
-Version:        1.3.3
-Release:        1%{?dist}
+Version:        1.3.4
+Release:        1%{?dist}.1
 Summary:        System handling for proprietary drivers
 
 Group:          System Environment/Base
@@ -38,7 +38,7 @@ mkdir -p $RPM_BUILD_ROOT%{python3_sitelib}/NvidiaDetector
 install -m 0755 pharlap $RPM_BUILD_ROOT%{_bindir}/
 install -m 0755 pharlap-cli $RPM_BUILD_ROOT%{_bindir}/
 
-install -m 0755 pharlap-modalias-generator.sh $RPM_BUILD_ROOT%{_datadir}/%{name}/pharlap-modalias-generator
+install -m 0755 pharlap-modalias-generator.py $RPM_BUILD_ROOT%{_datadir}/%{name}/pharlap-modalias-generator
 
 install -m 0644 detect-plugins/* $RPM_BUILD_ROOT%{_datadir}/%{name}/detect/
 install -m 0644 quirks/* $RPM_BUILD_ROOT%{_datadir}/%{name}/quirks/
@@ -55,7 +55,7 @@ install -m 0644 README $RPM_BUILD_ROOT%{_datadir}/%{name}/README
 
 install -m 0644 pharlap.desktop %{buildroot}%{_datadir}/applications/pharlap.desktop
 
-install -m 0644 pharlap-modalias.map $RPM_BUILD_ROOT%{_datadir}/%{name}/pharlap-modalias.map
+install -m 0644 modalias/pharlap-modalias.map $RPM_BUILD_ROOT%{_datadir}/%{name}/pharlap-modalias.map
 
 cp -a icons/* %{buildroot}%{_datadir}/icons/hicolor/
 
@@ -102,6 +102,10 @@ Modalias to package map for the Pharlap.
 %{_datadir}/icons/hicolor/*/*/*
 
 %changelog
+* Mon Jan 26 2015 Chris Smart <csmart@kororaproject.org> - 1.3.4-1
+- Support for NVIDIA 340 series drivers thanks to RPMFusion
+- Copy in correct generator script
+
 * Tue Jan 20 2015 Chris Smart <csmart@kororaproject.org> - 1.3.3-1
 - Add generic hwinfo icon for themes that have none.
 
