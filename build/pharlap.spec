@@ -48,8 +48,6 @@ install -m 0755 pharlap-modalias-generator.py %{buildroot}%{_datadir}/%{name}/ph
 install -m 0755 pharlap %{buildroot}%{_bindir}/
 install -m 0755 pharlap-cli %{buildroot}%{_bindir}/
 
-install -m 0755 pharlap-modalias-generator.sh %{buildroot}%{_datadir}/%{name}/pharlap-modalias-generator
-
 install -m 0644 detect-plugins/* %{buildroot}%{_datadir}/%{name}/detect/
 install -m 0644 quirks/* %{buildroot}%{_datadir}/%{name}/quirks/
 
@@ -87,18 +85,14 @@ rm -rf %{buildroot}
 semanage fcontext -a -t rpm_exec_t '%{_datadir}/%{name}/pharlapd' 2>/dev/null || :
 restorecon -R %{_datadir}/%{name}/pharlapd || :
 
-%postun
-if [ $1 -eq 0 ] ; then  # final removal
-semanage fcontext -d -t rpm_exec_t '%{_datadir}/%{name}/pharlapd' 2>/dev/null || :
-fi
-
-%post
 /bin/touch --no-create %{_datadir}/icons/hicolor &>/dev/null || :
 
 %postun
 if [ $1 -eq 0 ] ; then
-    /bin/touch --no-create %{_datadir}/icons/hicolor &>/dev/null
-    /usr/bin/gtk-update-icon-cache %{_datadir}/icons/hicolor &>/dev/null || :
+  semanage fcontext -d -t rpm_exec_t '%{_datadir}/%{name}/pharlapd' 2>/dev/null || :
+
+  /bin/touch --no-create %{_datadir}/icons/hicolor &>/dev/null
+  /usr/bin/gtk-update-icon-cache %{_datadir}/icons/hicolor &>/dev/null || :
 fi
 
 %posttrans
