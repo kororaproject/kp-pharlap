@@ -11,7 +11,6 @@
 import dnf
 import fnmatch
 import functools
-import hwdata
 import hawkey
 import json
 import logging
@@ -21,11 +20,13 @@ import subprocess
 
 from Pharlap import kerneldetection
 from Pharlap.dnfcache import DNFCache
+from Pharlap.hwdata import PCI, USB
 
 db = dnf.Base()
 system_architecture = dnf.arch.basearch( hawkey.detect_arch() )
-device_pci = hwdata.PCI()
-device_usb = hwdata.USB()
+
+device_pci = PCI()
+device_usb = USB()
 
 
 def load_modalias_map():

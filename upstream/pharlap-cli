@@ -121,6 +121,10 @@ def command_debug(args):
 
     cache = DNFCache()
 
+    loaded_modules = Pharlap.detect.loaded_modules_for_modaliases(modaliases=aliases)
+    print('=== loaded modules for aliases object ===')
+    print('%s' % (json.dumps(loaded_modules)))
+
     packages = Pharlap.detect.system_driver_packages(cache)
     auto_packages = Pharlap.detect.auto_install_filter(packages)
 

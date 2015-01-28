@@ -12,7 +12,7 @@ BuildArch:      noarch
 BuildRequires:  python3-devel desktop-file-utils
 
 Requires:       pharlap-modaliases
-Requires:       dnfdaemon python3-dnfdaemon python3-hwdata
+Requires:       dnfdaemon python3-dnfdaemon
 Requires:       polkit
 Requires:       python3-lens >= 0.7.5
 Requires(post):     policycoreutils-python
@@ -75,7 +75,7 @@ cp -r data/* %{buildroot}%{_datadir}/%{name}
 install -m 0644 dbus/org.kororaproject.Pharlap.conf %{buildroot}%{_sysconfdir}/dbus-1/system.d/
 install -m 0644 dbus/org.kororaproject.Pharlap.service %{buildroot}%{_datadir}/dbus-1/system-services/
 install -m 0755 pharlapd %{buildroot}%{_datadir}/%{name}/
-install -m polkit-1/polkit/org.kororaproject.Pharlap.policy %{buildroot}%{_datadir}/polkit-1/actions/
+install -m 0644 polkit/org.kororaproject.Pharlap.policy %{buildroot}%{_datadir}/polkit-1/actions/
 
 # validate desktop files
 desktop-file-validate %{buildroot}%{_datadir}/applications/pharlap.desktop
@@ -84,12 +84,12 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/pharlap.desktop
 rm -rf %{buildroot}
 
 %post
-semanage fcontext -a -t rpm_exec_t '%{_datadir}/%{name}/%{name}-system' 2>/dev/null || :
-restorecon -R %{_datadir}/%{name}/%{name}-system || :
+semanage fcontext -a -t rpm_exec_t '%{_datadir}/%{name}/pharlapd' 2>/dev/null || :
+restorecon -R %{_datadir}/%{name}/pharlapd || :
 
 %postun
 if [ $1 -eq 0 ] ; then  # final removal
-semanage fcontext -d -t rpm_exec_t '%{_datadir}/%{name}/%{name}-system' 2>/dev/null || :
+semanage fcontext -d -t rpm_exec_t '%{_datadir}/%{name}/pharlapd' 2>/dev/null || :
 fi
 
 %post
@@ -119,6 +119,7 @@ Modalias to package map for the Pharlap.
 %files
 %{_datadir}/dbus-1/system-services/org.kororaproject.Pharlap*
 %{_datadir}/%{name}/
+%exclude %{_datadir}/%{name}/pharlap-modalias.map
 %{_datadir}/polkit-1/actions/org.kororaproject.Pharlap*
 # this should not be edited by the user, so no %%config
 %{_sysconfdir}/dbus-1/system.d/org.kororaproject.Pharlap*

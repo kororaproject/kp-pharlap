@@ -25,6 +25,7 @@ import dbus
 import dbus.service
 import dbus.mainloop.glib
 import dnfdaemon.server
+import json
 import logging
 
 from dnfdaemon.server import Logger
@@ -32,6 +33,7 @@ from Pharlap.modprobe import ModProbe
 
 DAEMON_ORG = 'org.kororaproject.Pharlap'
 DAEMON_INT = DAEMON_ORG
+PHARLAP_VERSION = 1
 
 logger = logging.getLogger('pharlap.daemon')
 
@@ -39,7 +41,8 @@ logger = logging.getLogger('pharlap.daemon')
 class AccessDeniedError(dbus.DBusException):
   _dbus_error_name = DAEMON_ORG + '.AccessDeniedError'
 
-
+class LockedError(dbus.DBusException):
+    _dbus_error_name = DAEMON_ORG + '.LockedError'
 
 class NotImplementedError(dbus.DBusException):
   _dbus_error_name = DAEMON_ORG + '.NotImplementedError'
@@ -61,8 +64,34 @@ class PharlapDaemon(dnfdaemon.server.DnfDaemonBase):
     """
     Get the daemon version
     """
-    return dnfdaemon.server.VERSION
+    return PHARLAP_VERSION
 
+
+  @Logger
+  @dbus.service.method(DAEMON_INT, in_signature='', out_signature='b', sender_keyword='sender')
+  def Lock(self, sender=None):
+    """
+    Get the yum lock
+    :param sender:
+    """
+    self.check_permission_read(sender)
+    if not self._lock:
+      self._lock = sender
+      logger.info('LOCK: Locked by : %s' % sender)
+      return True
+
+    return False
+
+  @Logger
+  @dbus.service.method(DAEMON_INT, in_signature='', out_signature='b', sender_keyword='sender')
+  def Unlock(self, sender=None):
+    """ release the lock"""
+    self.check_permission_read(sender)
+    if self.check_lock(sender):
+      self._reset_base()
+      logger.info('UNLOCK: Lock Release by %s' % self._lock)
+      self._lock = None
+      return True
 
   @Logger
   @dbus.service.method(DAEMON_INT, in_signature='', out_signature='s')
@@ -74,7 +103,7 @@ class PharlapDaemon(dnfdaemon.server.DnfDaemonBase):
     hwinfo = '{}'
 
     ret = os.popen('/usr/sbin/lshw -quiet -json').read()
-    if len(ret) > 0:   
+    if len(ret) > 0:
       hwinfo = json.dumps(json.loads(ret))
 
     return hwinfo

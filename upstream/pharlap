@@ -18,6 +18,7 @@
 
 import dnf
 import hawkey
+import json
 import logging
 import math
 import os
@@ -156,13 +157,14 @@ def apply_changes_cb(request_install, request_remove):
   try:
     if len(drivers_install):
       print('Installing: %s' % (', '.join(drivers_install)))
-      dnfdaemon.Install(' '.join(drivers_install))
+      daemon.Install(' '.join(drivers_install))
 
     if len(drivers_remove):
       print('Removing: %s' % (', '.join(drivers_remove)))
-      dnfdaemon.Remove(' '.join(drivers_remove))
+      daemon.Remove(' '.join(drivers_remove))
 
-    app.dbus_async_call('update-packages', dnfdaemon.RunTransaction, 100)
+    daemon.BuildTransaction()
+    app.dbus_async_call('update-packages', daemon.RunTransaction, 100)
 
   except:
     app.emit('dnf-abort')
@@ -174,9 +176,14 @@ def close_cb():
 @app.connect('app.close')
 def _close_app_cb(*args):
   try:
-    dnfdaemon.Unlock()
+    daemon.Unlock()
   except:
     pass
+
+@app.connect('dbus.get-hardware')
+def _dnf_update_packages_cb(err, hardware):
+  # print(json.loads(ret))
+  pass
 
 @app.connect('dbus.update-packges')
 def _dnf_update_packages_cb(err, ret):
@@ -249,16 +256,21 @@ def _sig_rpm_progress_cb(package, action, te_current, te_total, ts_current, ts_t
   else:
     print('RPM: %s %s (%d, %d)' % (action, package, ts_current, ts_total))
 
-# build our dnfdaemon interface
-dnfdaemon = app.dbus_system_interface('org.baseurl.DnfSystem', '/')
+# build our daemon interface
+daemon = app.dbus_system_interface('org.kororaproject.Pharlap', '/')
 
-# connect the dnfdaemon signals
-dnfdaemon.connect_to_signal('TransactionEvent', _sig_transaction_cb, sender_keyword='sender')
-dnfdaemon.connect_to_signal('RPMProgress', _sig_rpm_progress_cb, sender_keyword='sender')
-dnfdaemon.connect_to_signal('DownloadStart', _sig_download_start_cb, sender_keyword='sender')
-dnfdaemon.connect_to_signal('DownloadProgress', _sig_download_progress_cb, sender_keyword='sender')
-dnfdaemon.connect_to_signal('ErrorMessage', _sig_error_cb, sender_keyword='sender')
+# connect the daemon signals
+daemon.connect_to_signal('TransactionEvent', _sig_transaction_cb, sender_keyword='sender')
+daemon.connect_to_signal('RPMProgress', _sig_rpm_progress_cb, sender_keyword='sender')
+daemon.connect_to_signal('DownloadStart', _sig_download_start_cb, sender_keyword='sender')
+daemon.connect_to_signal('DownloadProgress', _sig_download_progress_cb, sender_keyword='sender')
+daemon.connect_to_signal('ErrorMessage', _sig_error_cb, sender_keyword='sender')
 
-dnfdaemon.Lock()
+s = daemon.GetVersion()
+print(s)
+
+daemon.Lock()
+
+app.dbus_async_call('get-hardware', daemon.GetHardware, 100)
 
 app.start()
