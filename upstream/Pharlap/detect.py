@@ -81,7 +81,7 @@ def loaded_modules_for_modaliases(modaliases=None):
 
         # check lspci
         lspci_slot = modaliases[alias]['syspath'].split('/')[-1]
-        m = subprocess.check_output("lspci -kmvvD -s %s | awk '/(Driver|Module):/ { print $2 }'" % (lspci_slot), shell=True).decode('UTF-8').strip().replace('-', '_').split('\n')
+        m = subprocess.check_output("lspci -kmvvD -s %s | awk '/Driver:/ { print $2 }'" % (lspci_slot), shell=True).decode('UTF-8').strip().replace('-', '_').split('\n')
 
         modules = []
         if len(m):

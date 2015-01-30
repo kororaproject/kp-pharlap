@@ -1,5 +1,5 @@
 Name:           pharlap
-Version:        1.4
+Version:        1.4.1
 Release:        1%{?dist}
 Summary:        System handling for proprietary drivers
 
@@ -14,7 +14,7 @@ BuildRequires:  python3-devel desktop-file-utils
 Requires:       pharlap-modaliases
 Requires:       dnfdaemon python3-dnfdaemon
 Requires:       polkit
-Requires:       python3-lens >= 0.7.5
+Requires:       python3-lens >= 0.8
 Requires(post):     policycoreutils-python
 Requires(postun):   policycoreutils-python
 
@@ -128,6 +128,9 @@ Modalias to package map for the Pharlap.
 %{_datadir}/icons/hicolor/*/*/*
 
 %changelog
+* Fri Jan 30 2015 Ian Firns <firnsy@kororaproject.org> - 1.4.1-1
+- Fixed defunct process in pharlapd and cleaned console output.
+
 * Wed Jan 28 2015 Ian Firns <firnsy@kororaproject.org> - 1.4.0-1
 - New pharlap daemon for system configuration management.
 

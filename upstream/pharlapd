@@ -102,9 +102,14 @@ class PharlapDaemon(dnfdaemon.server.DnfDaemonBase):
 
     hwinfo = '{}'
 
-    ret = os.popen('/usr/sbin/lshw -quiet -json').read()
-    if len(ret) > 0:
-      hwinfo = json.dumps(json.loads(ret))
+    try:
+      p = os.popen('/usr/sbin/lshw -quiet -json')
+      ret = p.read()
+      p.close()
+      if len(ret) > 0:
+        hwinfo = json.dumps(json.loads(ret))
+    except:
+      pass
 
     return hwinfo
 

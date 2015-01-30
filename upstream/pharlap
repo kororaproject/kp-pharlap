@@ -266,11 +266,8 @@ daemon.connect_to_signal('DownloadStart', _sig_download_start_cb, sender_keyword
 daemon.connect_to_signal('DownloadProgress', _sig_download_progress_cb, sender_keyword='sender')
 daemon.connect_to_signal('ErrorMessage', _sig_error_cb, sender_keyword='sender')
 
-s = daemon.GetVersion()
-print(s)
-
 daemon.Lock()
 
-app.dbus_async_call('get-hardware', daemon.GetHardware, 100)
+#app.dbus_async_call('get-hardware', daemon.GetHardware, 100)
 
 app.start()
