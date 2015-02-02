@@ -1,6 +1,6 @@
 Name:           pharlap
-Version:        1.4.1
-Release:        1%{?dist}.1
+Version:        1.4.2
+Release:        1%{?dist}
 Summary:        System handling for proprietary drivers
 
 Group:          System Environment/Base
@@ -128,6 +128,9 @@ Modalias to package map for the Pharlap.
 %{_datadir}/icons/hicolor/*/*/*
 
 %changelog
+* Mon Feb 02 2015 Ian Firns <firnsy@kororaproject.org> - 1.4.2-1
+- Fixed missing DBus signals for daemon.
+
 * Fri Jan 30 2015 Ian Firns <firnsy@kororaproject.org> - 1.4.1-1
 - Fixed defunct process in pharlapd and cleaned console output.
 

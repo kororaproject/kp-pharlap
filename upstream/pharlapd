@@ -218,6 +218,79 @@ class PharlapDaemon(dnfdaemon.server.DnfDaemonBase):
     result = self.run_transaction(max_err)
     return self.working_ended(result)
 
+#
+# DBUS SIGNALS
+#
+
+  @dbus.service.signal(DAEMON_INT)
+  def ErrorMessage(self, error_msg):
+    """ Send an error message """
+    pass
+
+  @dbus.service.signal(DAEMON_INT)
+  def DownloadStart(self, num_files, num_bytes):
+    """ Starting a new parallel download batch """
+    pass
+
+  @dbus.service.signal(DAEMON_INT)
+  def DownloadProgress(self, name, frac, total_frac, total_files):
+    """ Progress for a single instance in the batch """
+    pass
+
+  @dbus.service.signal(DAEMON_INT)
+  def DownloadEnd(self, name, status, msg):
+    """ Download of af single instace ended """
+    pass
+
+  @dbus.service.signal(DAEMON_INT)
+  def RepoMetaDataProgress(self, name, frac):
+    """ Repository Metadata Download progress """
+    pass
+
+  @dbus.service.signal(DAEMON_INT)
+  def TransactionEvent(self, event, data):
+    """
+    DBus signal with Transaction event information, telling the current
+    step in the processing of the current transaction.
+
+    Steps are : start-run, download, pkg-to-download, signature-check,
+                run-test-transaction,
+    run-transaction, verify, fail, end-run
+
+    :param event: current step
+    """
+    # print "event: %s" % event
+    pass
+
+  @dbus.service.signal(DAEMON_INT)
+  def RPMProgress(self, package, action, te_current, te_total, ts_current, ts_total):
+    """
+    RPM Progress DBus signal
+    :param package: A yum package object or simple string of a package name
+    :param action: A yum.constant transaction set state or in the obscure
+                   rpm repackage case it could be the string 'repackaging'
+    :param te_current: Current number of bytes processed in the transaction
+                       element being processed
+    :param te_total: Total number of bytes in the transaction element being
+                     processed
+    :param ts_current: number of processes completed in whole transaction
+    :param ts_total: total number of processes in the transaction.
+    """
+    pass
+
+  @dbus.service.signal(DAEMON_INT)
+  def GPGImport(self, pkg_id, userid, hexkeyid, keyurl, timestamp):
+    """
+    GPG Key Import DBus signal
+
+    :param pkg_id: pkg_id for the package needing the GPG Key
+                   to be verified
+    :param userid: GPG key name
+    :param hexkeyid: GPG key hex id
+    :param keyurl: Url to the GPG Key
+    :param timestamp:
+    """
+    pass
 
 #
 # HELPERS
