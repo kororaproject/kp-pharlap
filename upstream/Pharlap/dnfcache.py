@@ -126,14 +126,20 @@ class DNFCache(object):
   def itervalues(self):
     return iter(self._c)
 
+  def get(self, key):
+    if not key in self._c:
+      return None
+
+    return self._c[key]
+
   def keys(self):
     return self._c.keys()
 
-  def values(self):
-    return self._c.values()
-
   def itervalues(self):
     return self._c.itervalues()
+
+  def values(self):
+    return self._c.values()
 
 
 class DNFCachePackage(object):

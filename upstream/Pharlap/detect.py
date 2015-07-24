@@ -472,14 +472,18 @@ def system_driver_packages(cache=None, modaliases=None, progress_cb=None):
         modules_classes = []
 
         for m in matched_aliases:
-            for p in modalias_map[ bus ][ m ].keys():
-                package = cache[p]
+            for p in modalias_map[bus][m].keys():
+                package = cache.get(p)
 
-                p_details = modalias_map[ bus ][ m ][ p ]
+                # ensure package still exists
+                if package is None:
+                    continue
 
-                suitable_packages.add( p )
+                p_details = modalias_map[bus][m][p]
 
-                modules_classes.append( p_details.get('class', 'other') )
+                suitable_packages.add(p)
+
+                modules_classes.append(p_details.get('class', 'other'))
 
                 driver = device['drivers'].setdefault(package.name, {
                     'version': package.version,
@@ -493,7 +497,7 @@ def system_driver_packages(cache=None, modaliases=None, progress_cb=None):
                 module = p_details['module']
 
                 if module not in modules:
-                  modules.append(module)
+                    modules.append(module)
 
         device.setdefault('class', max(set(modules_classes), key=modules_classes.count))
 

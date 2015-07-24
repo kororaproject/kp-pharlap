@@ -1,5 +1,5 @@
 Name:           pharlap
-Version:        1.4.2
+Version:        1.4.3
 Release:        1%{?dist}
 Summary:        System handling for proprietary drivers
 
@@ -128,6 +128,9 @@ Modalias to package map for the Pharlap.
 %{_datadir}/icons/hicolor/*/*/*
 
 %changelog
+* Fri Jul 24 2015 Ian Firns <firnsy@kororaproject.org> - 1.4.3-1
+- Updated modalias map and ensure resilience to older maps.
+
 * Mon Feb 02 2015 Ian Firns <firnsy@kororaproject.org> - 1.4.2-1
 - Fixed missing DBus signals for daemon.
 
