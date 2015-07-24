@@ -82,7 +82,7 @@ class PackageKitClient:
 
     try:
       self.pk_control.SuggestDaemonQuit()
-    except (AttributeError, dbus.DBusException), e:
+    except (AttributeError, dbus.DBusException) as e:
       # not initialized, or daemon timed out
       pass
 
@@ -203,7 +203,7 @@ class PackageKitClient:
     self._allow_cancel = allow
 
   def _h_error(self, enum, desc):
-    print desc
+    print(desc)
     self._error_enum = enum
 
   def _h_finished(self, status, code):
@@ -214,7 +214,7 @@ class PackageKitClient:
     def _cancel(xn):
       try:
         xn.Cancel()
-      except dbus.DBusException, e:
+      except dbus.DBusException as e:
         if e._dbus_error_name == 'org.freedesktop.PackageKit.Transaction.CannotCancel':
           pass
         else:
@@ -263,7 +263,7 @@ class PackageKitClient:
     self._finished_status = None
     try:
       tid = self.pk_control.CreateTransaction()
-    except (AttributeError, dbus.DBusException), e:
+    except (AttributeError, dbus.DBusException) as e:
       if self.pk_control == None or (hasattr(e, '_dbus_error_name') and \
         e._dbus_error_name == 'org.freedesktop.DBus.Error.ServiceUnknown'):
         # first initialization (lazy) or timeout
@@ -285,28 +285,28 @@ if __name__ == '__main__':
 
   pk = PackageKitClient()
 
-  print '---- Resolve() -----'
-  print pk.Resolve(DBUSPkFilter('none'), ['pmount', 'quilt', 'foobar'])
-  print pk.Resolve(DBUSPkFilter('none'), ['coreutils', 'pmount'])
-  print pk.Resolve(DBUSPkFilter('installed'), ['gnash'])
+  print('---- Resolve() -----')
+  print(pk.Resolve(DBUSPkFilter('none'), ['pmount', 'quilt', 'foobar']))
+  print(pk.Resolve(DBUSPkFilter('none'), ['coreutils', 'pmount']))
+  print(pk.Resolve(DBUSPkFilter('installed'), ['gnash']))
 
-  print '---- GetDetails() -----'
+  print('---- GetDetails() -----')
 #    print pk.GetDetails('installation-guide-powerpc;20080520ubuntu1;all;Ubuntu')
 
-  print '---- GetPackages() -----'
+  print('---- GetPackages() -----')
   a = pk.GetPackages(DBUSPkFilter('available'))
   i = pk.GetPackages(DBUSPkFilter('installed'))
-  print i
+  print(i)
 
   print('installed: %d, available: %d' %( len(i), len(a) ))
 
   sys.exit(0)
 
-  print '---- SearchNames() -----'
-  print pk.SearchNames(DBUSPkFilter('installed'), ['coreutils'])
+  print('---- SearchNames() -----')
+  print(pk.SearchNames(DBUSPkFilter('installed'), ['coreutils']))
 
   def cb(status, _id, pc, c):
-      print 'install pkg: %s %s, %i%%, cancel allowed: %s' % (status, _id,  pc, str(c))
+      print('install pkg: %s %s, %i%%, cancel allowed: %s' % (status, _id,  pc, str(c)))
       return True
 
 #  print '---- InstallPackages() -----'
@@ -314,7 +314,7 @@ if __name__ == '__main__':
 
 #    subprocess.call(['dpkg', '-l', 'pmount', 'quilt'])
 
-  print '---- RemovePackages() -----'
+  print('---- RemovePackages() -----')
   pk.RemovePackages(['gnash;1:0.8.10-4.fc18;x86_64;installed:fedora'], cb, allow_deps=True)
 #    pk.RemovePackages(['pmount;0.9.17-2;i386;Ubuntu', 'quilt;0.46-6;all;Ubuntu'], cb)
 

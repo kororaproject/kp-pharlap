@@ -151,7 +151,7 @@ class NvidiaDetection(object):
 
             try:
                 for record in package.record('modaliases'):
-                    print record
+                    print(record)
                     alias = record['alias']
                     vp = vendor_product_re.match(alias.lstrip())
                     if not vp:
