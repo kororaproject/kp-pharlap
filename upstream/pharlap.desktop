@@ -5,4 +5,4 @@ Icon=hwinfo
 Exec=/usr/bin/pharlap
 Terminal=false
 Type=Application
-Categories=KDE;GNOME;GTK;Settings;DesktopSettings;HardwareSettings;X-XFCE-SettingsDialog;X-XFCE-HardwareSettings;
+Categories=KDE;GNOME;GTK;Settings;HardwareSettings;X-XFCE-SettingsDialog;X-XFCE-HardwareSettings;
