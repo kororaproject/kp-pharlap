@@ -1,6 +1,6 @@
 Name:           pharlap
-Version:        1.4.3
-Release:        2%{?dist}
+Version:        1.4.4
+Release:        1%{?dist}
 Summary:        System handling for proprietary drivers
 
 Group:          System Environment/Base
@@ -11,6 +11,7 @@ Requires:       python3
 BuildArch:      noarch
 BuildRequires:  python3-devel desktop-file-utils
 
+Requires:       dnf >= 1.1
 Requires:       pharlap-modaliases
 Requires:       dnfdaemon python3-dnfdaemon
 Requires:       polkit
@@ -128,6 +129,9 @@ Modalias to package map for the Pharlap.
 %{_datadir}/icons/hicolor/*/*/*
 
 %changelog
+* Wed Aug 19 2015 Ian Firns <firnsy@kororaproject.org> - 1.4.4-1
+- Fixed cache generation in line with latest DNF changes.
+
 * Mon Jul 27 2015 Ian Firns <firnsy@kororaproject.org> - 1.4.3-2
 - Remove duplicate control center entries.
 

@@ -43,11 +43,11 @@ class DNFCache(object):
     self._db = db
     self._md_progress = DNFCacheMDProgress(cb=md_progress_cb)
 
+    RELEASE_VER = dnf.rpm.detect_releasever( db.conf.installroot )
+    self._db.conf.substitutions['releasever'] = RELEASE_VER
+
     # we're a cache after all
-    self._db.conf.releasever = dnf.rpm.detect_releasever( db.conf.installroot )
-    subst = self._db.conf.substitutions
-    suffix = dnf.conf.parser.substitute(dnf.const.CACHEDIR_SUFFIX, subst)
-    cli_cache = dnf.conf.CliCache(self._db.conf.cachedir, suffix)
+    cli_cache = dnf.conf.CliCache(self._db.conf)
     self._db.conf.cachedir = cli_cache.cachedir
     self._system_cachedir = cli_cache.system_cachedir
 
