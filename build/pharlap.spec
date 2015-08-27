@@ -1,6 +1,6 @@
 Name:           pharlap
 Version:        1.4.4
-Release:        1%{?dist}
+Release:        1%{?dist}.1
 Summary:        System handling for proprietary drivers
 
 Group:          System Environment/Base
