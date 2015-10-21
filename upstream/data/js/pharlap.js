@@ -7,7 +7,7 @@ Util.helpers = {
   },
 }
 
-function PharlapCtrl($scope, $modal) {
+app.controller('PharlapCtrl', function($scope, $modal) {
   $scope.util = Util.helpers;
 
   $scope.state = {
@@ -302,9 +302,9 @@ function PharlapCtrl($scope, $modal) {
 
   // INIT
   $scope.emit("init");
-}
+});
 
-var PharlapModuleSettingsModalCtrl = function($scope, $modalInstance, data) {
+app.controller('PharlapModuleSettingsModalCtrl', function($scope, $modalInstance, data) {
   $scope.data = data;
 
   $scope.ok = function() {
@@ -314,9 +314,9 @@ var PharlapModuleSettingsModalCtrl = function($scope, $modalInstance, data) {
   $scope.cancel = function() {
     $modalInstance.dismiss('cancel');
   };
-};
+});
 
-var PharlapProgressModalCtrl = function($scope, $modalInstance, data) {
+app.controller('PharlapProgressModalCtrl', function($scope, $modalInstance, data) {
   $scope.message = data.message;
   $scope.progress = data.progress;
   $scope.downloads_total = 0;
@@ -407,7 +407,7 @@ var PharlapProgressModalCtrl = function($scope, $modalInstance, data) {
     $scope.message = 'Aborting ...';
     $modalInstance.close(1);
   });
-};
+});
 
 /*
 ** PAGE HANDLER

@@ -119,18 +119,16 @@ class PharlapConfig(object):
     self._modaliases = modaliases
 
 
-
 app = App(name="Pharlap", width=792, height=496, inspector=True)
 
-app.namespaces = ['/usr/share/pharlap', 'data']
-app.load_ui('app.html')
+app.namespaces = ['data', '/usr/share/pharlap', 'data']
 
 db = dnf.Base()
 config = PharlapConfig()
 
 system = System().to_dict()
 
-@app.connect('init')
+@app.bind('init')
 def init_cb():
   t = DetectThread(config, do_cache=True, do_modules=True, do_modaliases=True, do_devices=True)
 
@@ -139,7 +137,7 @@ def init_cb():
   app.threads.on(t, 'complete', _detect_thread_complete_cb)
   app.threads.add(t)
 
-@app.connect('apply-changes')
+@app.bind('apply-changes')
 def apply_changes_cb(request_install, request_remove):
   drivers_install = request_install
   drivers_remove = request_remove
@@ -169,23 +167,23 @@ def apply_changes_cb(request_install, request_remove):
   except:
     app.emit('dnf-abort')
 
-@app.connect('close')
+@app.bind('close')
 def close_cb():
   app.close()
 
-@app.connect('app.close')
+@app.bind('app.close')
 def _close_app_cb(*args):
   try:
     daemon.Unlock()
   except:
     pass
 
-@app.connect('dbus.get-hardware')
+@app.bind('dbus.get-hardware')
 def _dnf_update_packages_cb(err, hardware):
   # print(json.loads(ret))
   pass
 
-@app.connect('dbus.update-packges')
+@app.bind('dbus.update-packges')
 def _dnf_update_packages_cb(err, ret):
   print(ret)
 
