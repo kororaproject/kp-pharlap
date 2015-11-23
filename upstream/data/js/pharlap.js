@@ -100,7 +100,7 @@ app.controller('PharlapCtrl', function($scope, $modal) {
 
     var modalInstance = $modal.open({
       backdrop: 'static',
-      controller: PharlapProgressModalCtrl,
+      controller: 'PharlapProgressModalCtrl',
       size: 'lg',
       templateUrl: 'dnfProgressModal.html',
       windowClass: 'no-animation',
