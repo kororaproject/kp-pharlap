@@ -1,5 +1,5 @@
 Name:           pharlap
-Version:        1.5.0
+Version:        1.5.1
 Release:        1%{?dist}.1
 Summary:        System handling for proprietary drivers
 
@@ -129,6 +129,9 @@ Modalias to package map for the Pharlap.
 %{_datadir}/icons/hicolor/*/*/*
 
 %changelog
+* Tue Nov 24 2015 Ian Firns <firnsy@kororaproject.org> - 1.5.1-1
+- Fix inability to apply changes.
+
 * Wed Oct 21 2015 Ian Firns <firnsy@kororaproject.org> - 1.5.0-1
 - Updated to latest lens.
 
