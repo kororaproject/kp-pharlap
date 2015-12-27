@@ -1,5 +1,5 @@
 Name:           pharlap
-Version:        1.5.1
+Version:        1.5.2
 Release:        1%{?dist}.1
 Summary:        System handling for proprietary drivers
 
@@ -129,6 +129,9 @@ Modalias to package map for the Pharlap.
 %{_datadir}/icons/hicolor/*/*/*
 
 %changelog
+* Sun Dec 27 2015 Ian Firns <firnsy@kororaproject.org> - 1.5.2-1
+- Switch to using dnfdaemon dbus service by default.
+
 * Tue Nov 24 2015 Ian Firns <firnsy@kororaproject.org> - 1.5.1-1
 - Fix inability to apply changes.
 
