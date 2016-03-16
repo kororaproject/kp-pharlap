@@ -1,6 +1,6 @@
 Name:           pharlap
 Version:        1.5.3
-Release:        1%{?dist}.1
+Release:        2%{?dist}
 Summary:        System handling for proprietary drivers
 
 Group:          System Environment/Base
@@ -129,6 +129,9 @@ Modalias to package map for the Pharlap.
 %{_datadir}/icons/hicolor/*/*/*
 
 %changelog
+* Wed Mar 16 2016 Chris Smart <csmart@kororaproject.org> - 1.5.3-2
+- Fix dnf api change.
+
 * Tue Jan 12 2016 Ian Firns <firnsy@kororaproject.org> - 1.5.3-1
 - Added nvidia logo.
 
