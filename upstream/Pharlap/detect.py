@@ -23,7 +23,7 @@ from Pharlap.dnfcache import DNFCache
 from Pharlap.hwdata import PCI, USB
 
 db = dnf.Base()
-system_architecture = dnf.arch.basearch( hawkey.detect_arch() )
+system_architecture = dnf.rpm.basearch( hawkey.detect_arch() )
 
 device_pci = PCI()
 device_usb = USB()
